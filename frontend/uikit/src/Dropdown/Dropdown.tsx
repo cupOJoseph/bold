@@ -1,14 +1,18 @@
-import type { ReactNode } from "react";
+"use client";
+
+import type { ReactElement, ReactNode } from "react";
 import type { CSSProperties } from "react";
 
-import { autoUpdate, offset, shift, useFloating } from "@floating-ui/react-dom";
+import { autoUpdate, computePosition, offset, shift, useFloating } from "@floating-ui/react-dom";
 import { a, useTransition } from "@react-spring/web";
-import { useEffect, useRef, useState } from "react";
+import { isValidElement, useEffect, useId, useRef, useState } from "react";
 import { css, cx } from "../../styled-system/css";
 import { IconChevronDown } from "../icons";
 import { Root } from "../Root/Root";
 
 export type DropdownItem = {
+  disabled?: boolean;
+  disabledReason?: string;
   icon?: ReactNode;
   label: ReactNode;
   secondary?: ReactNode;
@@ -17,11 +21,19 @@ export type DropdownItem = {
 
 export type DropdownGroup = {
   label: ReactNode;
-  items: readonly DropdownItem[];
+  items: DropdownItem[];
+};
+
+type NormalizedGroup = {
+  label: ReactNode | null;
+  items: DropdownItem[];
+  startIndex: number;
 };
 
 export function Dropdown({
   buttonDisplay = "normal",
+  customButton,
+  floatingUpdater,
   items,
   menuPlacement = "start",
   menuWidth,
@@ -33,29 +45,50 @@ export function Dropdown({
   buttonDisplay?:
     | "normal"
     | "label-only"
+    | ReactElement
     | ((item: DropdownItem, index: number) => {
       icon?: ReactNode;
       label: ReactNode;
     });
-  items: readonly DropdownItem[] | readonly DropdownGroup[];
-  menuPlacement?: "start" | "end";
+  customButton?: (ctx: {
+    item: DropdownItem | null;
+    index: number;
+    menuVisible: boolean;
+  }) => ReactElement;
+  floatingUpdater?: (args: {
+    computePosition: typeof computePosition;
+    referenceElement: HTMLElement;
+    floatingElement: HTMLElement;
+  }) => () => Promise<void>;
+  items: DropdownItem[] | DropdownGroup[];
+  menuPlacement?: "start" | "end" | "top-start" | "top-end";
   menuWidth?: number;
   onSelect: (index: number) => void;
   placeholder?: ReactNode | Exclude<DropdownItem, "value">;
-  selected: number;
+  selected: null | number;
   size?: "small" | "medium";
 }) {
-  const groups = getGroups(items);
-  const itemsOnly = groups.reduce((acc, { items }) => acc.concat(items), [] as DropdownItem[]);
+  const { groups, flatItems } = normalizeGroups(items);
+
+  let placement = menuPlacement === "start" || menuPlacement === "end"
+    ? `bottom-${menuPlacement}` as const
+    : menuPlacement;
 
   const { refs: floatingRefs, floatingStyles } = useFloating<HTMLButtonElement>({
-    placement: `bottom-${menuPlacement}`,
-    whileElementsMounted: (referenceEl, floatingEl, update) => (
-      autoUpdate(referenceEl, floatingEl, update, {
+    placement,
+    whileElementsMounted: (refEl, floatingEl, update) => {
+      const updateFromProps = refEl instanceof HTMLElement
+        ? floatingUpdater?.({
+          computePosition,
+          referenceElement: refEl,
+          floatingElement: floatingEl,
+        })
+        : null;
+      return autoUpdate(refEl, floatingEl, updateFromProps ?? update, {
         layoutShift: false,
         animationFrame: false,
-      })
-    ),
+      });
+    },
     middleware: [
       offset(8),
       shift(),
@@ -67,7 +100,7 @@ export function Dropdown({
     placeholder = { label: placeholder };
   }
 
-  if (selected === undefined) {
+  if (selected === null) {
     selected = placeholder ? -1 : 0;
   }
 
@@ -98,7 +131,8 @@ export function Dropdown({
     selectedButton?.focus();
   };
 
-  const menuVisibility = useTransition(showMenu, {
+  const menuVisibility = useTransition({ groups: showMenu ? groups : null }, {
+    keys: ({ groups }) => String(groups === null),
     config: {
       mass: 1,
       tension: 4000,
@@ -123,7 +157,7 @@ export function Dropdown({
 
   useKeyboardNavigation({
     focused,
-    itemsLength: itemsOnly.length,
+    itemsLength: flatItems.length,
     menuVisible: showMenu,
     onClose: hide,
     onFocus: setFocused,
@@ -141,18 +175,41 @@ export function Dropdown({
     }, 0);
   }, [focused, showMenu]);
 
-  let buttonItem = getItem(itemsOnly[selected] || placeholder);
-  if (typeof buttonDisplay === "function" && itemsOnly[selected]) {
-    buttonItem = buttonDisplay(itemsOnly[selected], selected);
-  }
-  if (!buttonItem) {
-    throw new Error("Invalid selected index or placeholder not provided");
-  }
+  const dropdownId = useId();
+
+  const buttonItem = (() => {
+    const baseItem = selected >= 0 ? flatItems[selected] : null;
+
+    if (typeof buttonDisplay === "function" && baseItem) {
+      return buttonDisplay(baseItem, selected);
+    }
+
+    if (baseItem) {
+      return baseItem;
+    }
+
+    if (placeholder && typeof placeholder === "object" && "label" in placeholder) {
+      return placeholder;
+    }
+
+    return placeholder ? { label: placeholder } : null;
+  })();
+
+  const customButton_ = customButton?.({
+    item: buttonItem,
+    index: selected,
+    menuVisible: showMenu,
+  }) ?? (
+    isValidElement(buttonDisplay) ? buttonDisplay : null
+  );
 
   return (
     <>
       <button
         ref={floatingRefs.setReference}
+        aria-expanded={showMenu}
+        aria-controls={dropdownId}
+        aria-haspopup="listbox"
         type="button"
         onClick={() => {
           if (!preventOpenOnRelease.current) {
@@ -165,78 +222,95 @@ export function Dropdown({
         className={cx(
           "group",
           css({
-            display: "flex",
-            height: 40,
+            display: "grid",
             outline: 0,
             cursor: "pointer",
           }),
         )}
-        style={{
+        style={customButton_ ? {} : {
           height: size === "small" ? 32 : 40,
           fontSize: size === "small" ? 16 : 24,
         }}
       >
-        <div
-          className={css({
-            display: "flex",
-            alignItems: "center",
-            padding: "0 10px 0 16px",
-            height: "100%",
-            whiteSpace: "nowrap",
-            borderWidth: "1px 1px 0 1px",
-            borderStyle: "solid",
-            borderColor: "#F5F6F8",
-            boxShadow: `
-              0 2px 2px rgba(0, 0, 0, 0.1),
-              0 4px 10px rgba(18, 27, 68, 0.05),
-              inset 0 -1px 4px rgba(0, 0, 0, 0.05)
-            `,
-            borderRadius: 90,
-            cursor: "pointer",
+        {customButton_ ?? (
+          buttonItem && (
+            <div
+              className={css({
+                display: "grid",
+                gridAutoFlow: "column",
+                alignItems: "center",
+                padding: "0 10px 0 16px",
+                height: "100%",
+                whiteSpace: "nowrap",
+                borderWidth: "1px 1px 0 1px",
+                borderStyle: "solid",
+                borderColor: "#F5F6F8",
+                boxShadow: `
+                  0 2px 2px rgba(0, 0, 0, 0.1),
+                  0 4px 10px rgba(18, 27, 68, 0.05),
+                  inset 0 -1px 4px rgba(0, 0, 0, 0.05)
+                `,
+                borderRadius: 90,
+                cursor: "pointer",
 
-            "--color-normal": "token(colors.content)",
-            "--color-placeholder": "token(colors.accentContent)",
-            "--background-normal": "token(colors.controlSurface)",
-            "--background-placeholder": "token(colors.accent)",
+                "--color-normal": "token(colors.content)",
+                "--color-placeholder": "token(colors.accentContent)",
+                "--background-normal": "token(colors.controlSurface)",
+                "--background-placeholder": "token(colors.accent)",
 
-            _groupActive: {
-              translate: "0 1px",
-              boxShadow: `0 1px 1px rgba(0, 0, 0, 0.1)`,
-            },
-            _groupFocusVisible: {
-              outline: "2px solid token(colors.focused)",
-            },
-          })}
-          style={{
-            gap: size === "small" ? 6 : 8,
-            color: `var(--color-${buttonItem === placeholder ? "placeholder" : "normal"})`,
-            background: `var(--background-${buttonItem === placeholder ? "placeholder" : "normal"})`,
-          } as CSSProperties}
-        >
-          {buttonItem.icon && buttonDisplay !== "label-only" && (
-            <div style={{ marginLeft: -6 }}>
-              {buttonItem.icon}
+                _groupActive: {
+                  translate: "0 1px",
+                  boxShadow: `0 1px 1px rgba(0, 0, 0, 0.1)`,
+                },
+                _groupFocusVisible: {
+                  outline: "2px solid token(colors.focused)",
+                },
+              })}
+              style={{
+                gap: size === "small" ? 6 : 8,
+                color: `var(--color-${buttonItem === placeholder ? "placeholder" : "normal"})`,
+                background: `var(--background-${buttonItem === placeholder ? "placeholder" : "normal"})`,
+              } as CSSProperties}
+            >
+              {buttonItem.icon && buttonDisplay !== "label-only" && (
+                <div style={{ marginLeft: -6 }}>
+                  {buttonItem.icon}
+                </div>
+              )}
+              <div
+                className={css({
+                  display: "grid",
+                  alignItems: "center",
+                  gap: 8,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                })}
+              >
+                <div
+                  className={css({
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  })}
+                >
+                  {buttonItem.label}
+                </div>
+              </div>
+              <div>
+                <IconChevronDown size={size === "small" ? 16 : 24} />
+              </div>
             </div>
-          )}
-          <div
-            className={css({
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            })}
-          >
-            {buttonItem.label}
-          </div>
-          <div>
-            <IconChevronDown size={size === "small" ? 16 : 24} />
-          </div>
-        </div>
+          )
+        )}
       </button>
       <Root>
-        {menuVisibility((appearStyles, show) => (
-          show && (
+        {menuVisibility((appearStyles, { groups }) => (
+          groups && (
             <a.div
               ref={floatingRefs.setFloating}
+              id={dropdownId}
               className={css({
                 position: "absolute",
                 top: 0,
@@ -267,9 +341,9 @@ export function Dropdown({
                 })}
                 style={appearStyles}
               >
-                {groups.map((group, groupIndex) => (
+                {groups.map((group) => (
                   <div
-                    key={groupIndex}
+                    key={group.startIndex}
                     className={css({
                       display: "flex",
                       flexDirection: "column",
@@ -277,7 +351,6 @@ export function Dropdown({
                   >
                     {group.label && (
                       <div
-                        key={groupIndex}
                         className={css({
                           display: "flex",
                           alignItems: "center",
@@ -291,14 +364,14 @@ export function Dropdown({
                         {group.label}
                       </div>
                     )}
-                    {group.items.map((item_) => {
-                      const item = getItem(item_);
-                      const index = item ? itemsOnly.indexOf(item) : -1;
+                    {group.items.map((item, itemIndex) => {
+                      const index = group.startIndex + itemIndex;
                       return item && (
                         <button
-                          key={`${groupIndex}${index}`}
+                          key={`${group.startIndex}${itemIndex}`}
                           tabIndex={index === focused ? 0 : -1}
                           type="button"
+                          disabled={item.disabled}
                           onMouseOver={() => {
                             setFocused(index);
                           }}
@@ -317,6 +390,9 @@ export function Dropdown({
                             css({
                               padding: 4,
                               cursor: "pointer",
+                              _disabled: {
+                                cursor: "not-allowed",
+                              },
                               _focus: {
                                 outline: 0,
                               },
@@ -341,6 +417,9 @@ export function Dropdown({
                               _groupActive: {
                                 background: "focusedSurfaceActive",
                               },
+                              _groupDisabled: {
+                                opacity: 0.5,
+                              },
                             })}
                           >
                             <div
@@ -358,6 +437,7 @@ export function Dropdown({
                                   display: "flex",
                                   alignItems: "center",
                                   gap: 12,
+                                  width: "100%",
                                 })}
                               >
                                 {item.icon && <div>{item.icon}</div>}
@@ -365,10 +445,23 @@ export function Dropdown({
                                   className={css({
                                     display: "flex",
                                     alignItems: "center",
+                                    justifyContent: "space-between",
                                     gap: 8,
+                                    width: "100%",
                                   })}
                                 >
-                                  {item.label}
+                                  <div>{item.label}</div>
+                                  {item.disabled && (
+                                    <div
+                                      className={css({
+                                        fontSize: 11,
+                                        textTransform: "uppercase",
+                                        whiteSpace: "nowrap",
+                                      })}
+                                    >
+                                      {item.disabledReason ?? "Disabled"}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               {item.value && <div>{item.value}</div>}
@@ -441,24 +534,37 @@ function useKeyboardNavigation({
   }, [itemsLength, onClose, onFocus, focused, menuVisible]);
 }
 
-function getItem(item: DropdownItem | ReactNode): null | DropdownItem {
-  if (!item) {
-    return null;
-  }
-  return typeof item === "object" && "label" in item ? item : { label: item };
+function isDropdownGroups(items: DropdownItem[] | DropdownGroup[]): items is DropdownGroup[] {
+  // only check the first item
+  return items.length > 0 && typeof items[0] === "object" && "items" in items[0];
 }
 
-function isGroup(item: DropdownItem | DropdownGroup): item is DropdownGroup {
-  return Boolean(typeof item === "object" && item && "items" in item);
-}
+function normalizeGroups(itemsOrGroups: DropdownItem[] | DropdownGroup[]): {
+  groups: NormalizedGroup[];
+  flatItems: DropdownItem[];
+} {
+  const flatItems: DropdownItem[] = [];
+  const groups: NormalizedGroup[] = [];
 
-// Convert items to groups if necessary
-function getGroups(itemsOrGroup: readonly DropdownItem[] | readonly DropdownGroup[]): readonly DropdownGroup[] {
-  const [firstItem] = itemsOrGroup;
-  if (!firstItem) {
-    return [];
+  // groups
+  if (isDropdownGroups(itemsOrGroups)) {
+    for (const group of itemsOrGroups) {
+      groups.push({
+        label: group.label ?? null,
+        items: group.items,
+        startIndex: flatItems.length,
+      });
+      flatItems.push(...group.items);
+    }
+    return { groups, flatItems };
   }
-  return isGroup(firstItem)
-    ? (itemsOrGroup as DropdownGroup[])
-    : [{ label: null, items: itemsOrGroup }];
+
+  // items
+  groups.push({
+    label: null,
+    items: itemsOrGroups,
+    startIndex: 0,
+  });
+  flatItems.push(...itemsOrGroups);
+  return { groups, flatItems };
 }

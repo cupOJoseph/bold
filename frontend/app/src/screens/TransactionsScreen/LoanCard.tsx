@@ -4,16 +4,18 @@ import type { LoadingState } from "./TransactionsScreen";
 
 import { INFINITY } from "@/src/characters";
 import { Spinner } from "@/src/comps/Spinner/Spinner";
+import { TagPreview } from "@/src/comps/TagPreview/TagPreview";
 import { Value } from "@/src/comps/Value/Value";
 import { formatRisk } from "@/src/formatting";
 import { fmtnum } from "@/src/formatting";
 import { getLoanDetails } from "@/src/liquity-math";
+import { getCollToken } from "@/src/liquity-utils";
 import { usePrice } from "@/src/services/Prices";
 import { riskLevelToStatusMode } from "@/src/uikit-utils";
 import { roundToDecimal } from "@/src/utils";
 import { css } from "@/styled-system/css";
 import { token } from "@/styled-system/tokens";
-import { Button, HFlex, IconBorrow, IconLeverage, StatusDot, TokenIcon, TOKENS_BY_SYMBOL } from "@liquity2/uikit";
+import { Button, HFlex, IconBorrow, IconLeverage, StatusDot, TokenIcon } from "@liquity2/uikit";
 import { a, useSpring } from "@react-spring/web";
 import * as dn from "dnum";
 import { match, P } from "ts-pattern";
@@ -25,38 +27,43 @@ export function LoanCard({
   leverageMode,
   loadingState,
   loan,
-  prevLoan,
   onRetry,
+  prevLoan,
+  txPreviewMode = false,
 }: {
   leverageMode: boolean;
   loadingState: LoadingState;
   loan: PositionLoan | null;
-  prevLoan?: PositionLoan | null;
   onRetry: () => void;
+  prevLoan?: PositionLoan | null;
+  txPreviewMode?: boolean;
 }) {
-  const collateral = (
-    loan && TOKENS_BY_SYMBOL[loan.collateral]
-  ) || (
-    prevLoan && TOKENS_BY_SYMBOL[prevLoan.collateral]
-  );
-  const collPriceUsd = usePrice(collateral ? collateral.symbol : null);
+  const branchId = loan?.branchId ?? prevLoan?.branchId ?? null;
+  const collToken = getCollToken(branchId);
+
+  if (!collToken) {
+    throw new Error(`Collateral token not found: ${branchId}`);
+  }
+
+  const collPriceUsd = usePrice(collToken.symbol);
 
   const isLoanClosing = prevLoan && !loan;
+  const maxLtv = dn.div(dn.from(1, 18), collToken.collateralRatio);
 
-  const loanDetails = loan && collateral && getLoanDetails(
+  const loanDetails = loan && getLoanDetails(
     loan.deposit,
     loan.borrowed,
     loan.interestRate,
-    collateral.collateralRatio,
-    collPriceUsd,
+    collToken.collateralRatio,
+    collPriceUsd.data ?? null,
   );
 
-  const prevLoanDetails = prevLoan && collateral && getLoanDetails(
+  const prevLoanDetails = prevLoan && getLoanDetails(
     prevLoan.deposit,
     prevLoan.borrowed,
     prevLoan.interestRate,
-    collateral.collateralRatio,
-    collPriceUsd,
+    collToken.collateralRatio,
+    collPriceUsd.data ?? null,
   );
 
   const {
@@ -65,19 +72,27 @@ export function LoanCard({
     leverageFactor,
     redemptionRisk,
     liquidationRisk,
+    liquidationPrice,
   } = loanDetails || {};
 
-  const maxLtv = collateral && dn.div(
-    dn.from(1, 18),
-    collateral.collateralRatio,
+  const loanDetailsFilled = Boolean(
+    typeof leverageFactor === "number"
+      && depositPreLeverage
+      && liquidationRisk
+      && liquidationPrice,
   );
 
   return (
     <LoadingCard
       height={isLoanClosing ? LOAN_CARD_HEIGHT_REDUCED : LOAN_CARD_HEIGHT}
       leverage={leverageMode}
-      loadingState={loadingState}
+      loadingState={loadingState === "success"
+        ? collPriceUsd.status === "pending" || (!isLoanClosing && !loanDetailsFilled)
+          ? "loading"
+          : collPriceUsd.status
+        : loadingState}
       onRetry={onRetry}
+      txPreviewMode={txPreviewMode}
     >
       {isLoanClosing
         ? (
@@ -99,53 +114,51 @@ export function LoanCard({
                 paddingTop: 32,
               })}
             >
-              {collateral && (
-                <GridItem label="Collateral">
+              <GridItem label="Collateral">
+                <div
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  })}
+                >
                   <div
-                    className={css({
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    })}
+                    style={{
+                      color: "var(--colors-positive-alt)",
+                    }}
                   >
-                    <div
-                      style={{
-                        color: "var(--colors-positive-alt)",
-                      }}
-                    >
-                      {fmtnum(0)} {collateral.name}
-                    </div>
-                    {prevLoan && (
-                      <div
-                        title={`${fmtnum(prevLoan.deposit, "full")} ${collateral.name}`}
-                        className={css({
-                          color: "contentAlt",
-                          textDecoration: "line-through",
-                        })}
-                      >
-                        {fmtnum(prevLoan.deposit)} {collateral.name}
-                      </div>
-                    )}
+                    {fmtnum(0)} {collToken.name}
                   </div>
-                </GridItem>
-              )}
+                  {prevLoan && (
+                    <div
+                      title={`${fmtnum(prevLoan.deposit, "full")} ${collToken.name}`}
+                      className={css({
+                        color: "contentAlt",
+                        textDecoration: "line-through",
+                      })}
+                    >
+                      {fmtnum(prevLoan.deposit)} {collToken.name}
+                    </div>
+                  )}
+                </div>
+              </GridItem>
             </div>
           </>
         )
         : loan
           && loanDetails
-          && collateral
           && typeof leverageFactor === "number"
           && depositPreLeverage
-          && maxLtv
           && liquidationRisk
+          && liquidationPrice
           && (
             <>
               {leverageMode
                 ? (
-                  <TotalExposure
+                  <LeveragedExposure
                     loan={loan}
                     loanDetails={loanDetails}
+                    prevLoanDetails={prevLoanDetails ?? null}
                   />
                 )
                 : (
@@ -165,12 +178,33 @@ export function LoanCard({
                 {leverageMode
                   ? (
                     <GridItem label="Net value">
-                      <Value
-                        negative={loanDetails.status === "underwater"}
-                        title={`${fmtnum(depositPreLeverage)} ${collateral.name}`}
+                      <div
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        })}
                       >
-                        {fmtnum(depositPreLeverage)} {collateral.name}
-                      </Value>
+                        <Value
+                          negative={loanDetails.status === "underwater"}
+                          title={`${fmtnum(depositPreLeverage, "full")} ${collToken.name}`}
+                        >
+                          {fmtnum(depositPreLeverage)} {collToken.name}
+                        </Value>
+                        {prevLoanDetails?.depositPreLeverage
+                          && !dn.eq(prevLoanDetails.depositPreLeverage, depositPreLeverage)
+                          && (
+                            <div
+                              title={`${fmtnum(prevLoanDetails.depositPreLeverage, "full")} ${collToken.name}`}
+                              className={css({
+                                color: "contentAlt",
+                                textDecoration: "line-through",
+                              })}
+                            >
+                              {fmtnum(prevLoanDetails.depositPreLeverage)} {collToken.name}
+                            </div>
+                          )}
+                      </div>
                     </GridItem>
                   )
                   : (
@@ -182,18 +216,18 @@ export function LoanCard({
                           gap: 8,
                         })}
                       >
-                        <div title={`${fmtnum(loan.deposit, "full")} ${collateral.name}`}>
-                          {fmtnum(loan.deposit)} {collateral.name}
+                        <div title={`${fmtnum(loan.deposit, "full")} ${collToken.name}`}>
+                          {fmtnum(loan.deposit)} {collToken.name}
                         </div>
                         {prevLoan && !dn.eq(prevLoan.deposit, loan.deposit) && (
                           <div
-                            title={`${fmtnum(prevLoan.deposit, "full")} ${collateral.name}`}
+                            title={`${fmtnum(prevLoan.deposit, "full")} ${collToken.name}`}
                             className={css({
                               color: "contentAlt",
                               textDecoration: "line-through",
                             })}
                           >
-                            {fmtnum(prevLoan.deposit)} {collateral.name}
+                            {fmtnum(prevLoan.deposit)} {collToken.name}
                           </div>
                         )}
                       </div>
@@ -208,14 +242,11 @@ export function LoanCard({
                     })}
                   >
                     <Value negative={ltv && dn.gt(ltv, maxLtv)}>
-                      ${fmtnum(loanDetails.liquidationPrice)}
+                      {fmtnum(liquidationPrice, { preset: "2z", prefix: "$" })}
                     </Value>
-                    {loanDetails?.liquidationPrice
+                    {liquidationPrice
                       && prevLoanDetails?.liquidationPrice
-                      && !dn.eq(
-                        prevLoanDetails.liquidationPrice,
-                        loanDetails.liquidationPrice,
-                      )
+                      && !dn.eq(prevLoanDetails.liquidationPrice, liquidationPrice)
                       && (
                         <div
                           className={css({
@@ -223,7 +254,7 @@ export function LoanCard({
                             textDecoration: "line-through",
                           })}
                         >
-                          ${fmtnum(prevLoanDetails.liquidationPrice)}
+                          {fmtnum(prevLoanDetails.liquidationPrice, { preset: "2z", prefix: "$" })}
                         </div>
                       )}
                   </div>
@@ -236,7 +267,28 @@ export function LoanCard({
                       gap: 8,
                     })}
                   >
-                    {fmtnum(dn.mul(loan.interestRate, 100))}%
+                    <div>
+                      {fmtnum(loan.interestRate, "pct2z")}%
+                    </div>
+                    {loan.batchManager && (
+                      <div
+                        title={`Interest rate delegate: ${loan.batchManager}`}
+                        className={css({
+                          display: "flex",
+                          alignItems: "center",
+                          height: 16,
+                          padding: "0 6px",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          color: "content",
+                          background: "brandCyan",
+                          borderRadius: 20,
+                        })}
+                      >
+                        delegated
+                      </div>
+                    )}
                     {prevLoan && !dn.eq(prevLoan.interestRate, loan.interestRate) && (
                       <div
                         className={css({
@@ -244,7 +296,7 @@ export function LoanCard({
                           textDecoration: "line-through",
                         })}
                       >
-                        {fmtnum(dn.mul(prevLoan.interestRate, 100))}%
+                        {fmtnum(prevLoan.interestRate, "pct2z")}%
                       </div>
                     )}
                   </div>
@@ -271,7 +323,7 @@ export function LoanCard({
                           : "var(--status-negative)",
                       }}
                     >
-                      {ltv && fmtnum(dn.mul(ltv, 100))}%
+                      {fmtnum(ltv, "pct2z")}%
                     </div>
                     {ltv
                       && prevLoanDetails?.ltv
@@ -283,7 +335,7 @@ export function LoanCard({
                             textDecoration: "line-through",
                           })}
                         >
-                          {prevLoanDetails.ltv && fmtnum(dn.mul(prevLoanDetails.ltv, 100))}%
+                          {fmtnum(prevLoanDetails.ltv, "pct2z")}%
                         </div>
                       )}
                   </div>
@@ -406,14 +458,19 @@ function TotalDebt({
   );
 }
 
-function TotalExposure({
+function LeveragedExposure({
   loan,
   loanDetails,
+  prevLoanDetails,
 }: {
   loan: PositionLoan;
   loanDetails: ReturnType<typeof getLoanDetails>;
+  prevLoanDetails: null | ReturnType<typeof getLoanDetails>;
 }) {
-  const collateral = loan && TOKENS_BY_SYMBOL[loan.collateral];
+  const collToken = getCollToken(loan.branchId);
+  if (!collToken) {
+    return null;
+  }
   return (
     <div
       className={css({
@@ -432,7 +489,7 @@ function TotalExposure({
         })}
       >
         <div
-          title={`${fmtnum(loan.deposit, "full")} ${collateral}`}
+          title={`${fmtnum(loan.deposit, "full")} ${collToken.name}`}
           className={css({
             display: "flex",
             alignItems: "center",
@@ -440,31 +497,42 @@ function TotalExposure({
           })}
         >
           <div>{fmtnum(loan.deposit)}</div>
-          <TokenIcon symbol={collateral.symbol} size={32} />
+          <TokenIcon symbol={collToken.symbol} size={32} />
           <div
             className={css({
               display: "flex",
-              flexDirection: "column",
-              gap: 4,
+              alignItems: "center",
+              gap: 8,
+              fontSize: 16,
             })}
           >
-            <div>
-              <Value
-                negative={loanDetails.status === "underwater" || loanDetails.status === "liquidatable"}
-                title={`Leverage factor: ${
-                  loanDetails.status === "underwater" || loanDetails.leverageFactor === null
-                    ? INFINITY
-                    : `${roundToDecimal(loanDetails.leverageFactor, 3)}x`
-                }`}
+            <Value
+              negative={loanDetails.status === "underwater" || loanDetails.status === "liquidatable"}
+              title={`Multiply factor: ${
+                loanDetails.status === "underwater" || loanDetails.leverageFactor === null
+                  ? INFINITY
+                  : `${roundToDecimal(loanDetails.leverageFactor, 3)}x`
+              }`}
+              className={css({
+                fontSize: 16,
+              })}
+            >
+              {loanDetails.status === "underwater" || loanDetails.leverageFactor === null
+                ? INFINITY
+                : `${roundToDecimal(loanDetails.leverageFactor, 1)}x`}
+            </Value>
+            {prevLoanDetails && prevLoanDetails.leverageFactor !== loanDetails.leverageFactor && (
+              <div
                 className={css({
-                  fontSize: 16,
+                  color: "contentAlt",
+                  textDecoration: "line-through",
                 })}
               >
-                {loanDetails.status === "underwater" || loanDetails.leverageFactor === null
+                {prevLoanDetails.leverageFactor === null
                   ? INFINITY
-                  : `${roundToDecimal(loanDetails.leverageFactor, 1)}x`}
-              </Value>
-            </div>
+                  : `${roundToDecimal(prevLoanDetails.leverageFactor, 1)}x`}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -478,14 +546,16 @@ function LoadingCard({
   leverage,
   loadingState,
   onRetry,
+  txPreviewMode,
 }: {
   children: ReactNode;
   height: number;
   leverage: boolean;
   loadingState: LoadingState;
   onRetry: () => void;
+  txPreviewMode?: boolean;
 }) {
-  const title = leverage ? "Leverage loan" : "BOLD loan";
+  const title = leverage ? "Multiply" : "BOLD loan";
 
   const spring = useSpring({
     to: match(loadingState)
@@ -502,8 +572,7 @@ function LoadingCard({
             - 120 // top bar
             - 24 * 2 // padding
             - 48 // bottom bar 1
-            - 40
-            // - 40 // bottom bar 2
+            - 40 // bottom bar 2
           ),
           cardHeight: s === "error" || s === "not-found" ? 180 : 120,
           cardBackground: token("colors.blue:50"),
@@ -514,7 +583,7 @@ function LoadingCard({
         cardtransform: "scale3d(1, 1, 1)",
         containerHeight: height,
         cardHeight: height,
-        cardBackground: token("colors.blue:950"),
+        cardBackground: token("colors.position"),
         cardColor: token("colors.white"),
       })),
     config: {
@@ -530,6 +599,7 @@ function LoadingCard({
         display: "flex",
         justifyContent: "center",
         flexDirection: "column",
+        width: "100%",
       })}
       style={{
         height: spring.containerHeight,
@@ -551,6 +621,7 @@ function LoadingCard({
           willChange: "transform",
         }}
       >
+        {txPreviewMode && loadingState === "success" && <TagPreview />}
         <h1
           className={css({
             display: "flex",
@@ -648,24 +719,36 @@ function GridItem({
 }) {
   return (
     <div
-      title={title}
       className={css({
-        display: "flex",
-        flexDirection: "column",
+        display: "grid",
         gap: 4,
         fontSize: 14,
       })}
     >
       <div
+        title={title}
         className={css({
+          minWidth: 0,
           color: "strongSurfaceContentAlt",
         })}
       >
-        {label}
+        <div
+          title={label}
+          className={css({
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
+          })}
+        >
+          {label}
+        </div>
       </div>
       <div
         className={css({
           color: "strongSurfaceContent",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
         })}
       >
         {children}

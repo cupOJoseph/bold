@@ -1,262 +1,169 @@
 "use client";
 
-import type { CollateralSymbol } from "@liquity2/uikit";
-import type { Dnum } from "dnum";
-
-import { Amount } from "@/src/comps/Amount/Amount";
-import { BackButton } from "@/src/comps/BackButton/BackButton";
-import { Details } from "@/src/comps/Details/Details";
+import { useBreakpointName } from "@/src/breakpoints";
+import { EarnPositionSummary } from "@/src/comps/EarnPositionSummary/EarnPositionSummary";
 import { Screen } from "@/src/comps/Screen/Screen";
+import { ScreenCard } from "@/src/comps/Screen/ScreenCard";
+import { Spinner } from "@/src/comps/Spinner/Spinner";
 import content from "@/src/content";
-import { useCollIndexFromSymbol } from "@/src/liquity-utils";
-import { useAccount, useBalance } from "@/src/services/Ethereum";
-import { useEarnPosition, useStabilityPool } from "@/src/subgraph-hooks";
-import { infoTooltipProps } from "@/src/uikit-utils";
+import { getBranch, getCollToken, useEarnPool, useEarnPosition } from "@/src/liquity-utils";
+import { useWait } from "@/src/react-utils";
+import { useAccount } from "@/src/wagmi-utils";
 import { css } from "@/styled-system/css";
-import {
-  HFlex,
-  InfoTooltip,
-  isCollateralSymbol,
-  Tabs,
-  TokenIcon,
-  TokenIconGroup,
-  TOKENS_BY_SYMBOL,
-} from "@liquity2/uikit";
+import { HFlex, IconEarn, isCollateralSymbol, Tabs } from "@liquity2/uikit";
+import { a, useTransition } from "@react-spring/web";
 import * as dn from "dnum";
 import { useParams, useRouter } from "next/navigation";
-import { DepositPanel } from "./DepositPanel";
-import { RewardsPanel } from "./RewardsPanel";
-import { WithdrawPanel } from "./WithdrawPanel";
+import { match } from "ts-pattern";
+import { PanelClaimRewards } from "./PanelClaimRewards";
+import { PanelUpdateDeposit } from "./PanelUpdateDeposit";
 
 const TABS = [
   { action: "deposit", label: content.earnScreen.tabs.deposit },
-  { action: "withdraw", label: content.earnScreen.tabs.withdraw },
   { action: "claim", label: content.earnScreen.tabs.claim },
 ] as const;
 
 export function EarnPoolScreen() {
-  const router = useRouter();
   const params = useParams();
 
-  const account = useAccount();
-  const boldBalance = useBalance(account.address, "BOLD");
-
   const collateralSymbol = String(params.pool).toUpperCase();
-  const isCollSymbolOk = isCollateralSymbol(collateralSymbol);
-  const collIndex = useCollIndexFromSymbol(isCollSymbolOk ? collateralSymbol : null);
-
-  const earnPosition = useEarnPosition(account.address, collIndex ?? undefined);
-  const stabilityPool = useStabilityPool(collIndex ?? undefined);
-
-  if (!collIndex === null || !isCollSymbolOk) {
-    return null;
+  if (!isCollateralSymbol(collateralSymbol)) {
+    throw new Error("Invalid collateral symbol");
   }
 
   const tab = TABS.find((tab) => tab.action === params.action) ?? TABS[0];
+  if (!tab) {
+    throw new Error("Invalid tab action: " + params.action);
+  }
 
-  const share = earnPosition.data && stabilityPool.data && dn.gt(stabilityPool.data.totalDeposited, 0)
-    ? dn.div(earnPosition.data.deposit, stabilityPool.data.totalDeposited)
-    : dn.from(0, 18);
+  const router = useRouter();
+  const account = useAccount();
 
-  const poolToken = TOKENS_BY_SYMBOL[collateralSymbol];
+  const branch = getBranch(collateralSymbol);
+  const collToken = getCollToken(branch.id);
+  const earnPosition = useEarnPosition(branch.id, account.address ?? null);
+  const earnPool = useEarnPool(branch.id);
+  const ready = useWait(500);
 
-  return stabilityPool.data && tab && (
-    <Screen>
-      <BackButton href="/earn" label={content.earnScreen.backButton} />
-      <PoolSummary
-        apr={stabilityPool.data.apr}
-        boldQty={stabilityPool.data.totalDeposited}
-        symbol={collateralSymbol}
-      />
-      {earnPosition.data && (
-        <Details
-          items={[
-            {
-              label: content.earnScreen.accountPosition.depositLabel,
-              value: <Amount value={earnPosition.data.deposit} suffix=" BOLD" />,
-            },
-            {
-              label: content.earnScreen.accountPosition.shareLabel,
-              value: <Amount percentage value={share} />,
-            },
-            {
-              label: content.earnScreen.accountPosition.rewardsLabel,
-              value: earnPosition.data.rewards && (
-                <HFlex
-                  gap={8}
-                  justifyContent="flex-start"
+  const loadingState = !ready || earnPool.isLoading || earnPosition.isLoading ? "loading" : "success";
+
+  const tabsTransition = useTransition(loadingState, {
+    from: { opacity: 0 },
+    enter: { opacity: 1 },
+    leave: { opacity: 0 },
+    config: {
+      mass: 1,
+      tension: 2000,
+      friction: 120,
+    },
+  });
+
+  const breakpointName = useBreakpointName();
+
+  return (
+    <Screen
+      ready={loadingState === "success"}
+      back={{
+        href: "/earn",
+        label: content.earnScreen.backButton,
+      }}
+      heading={
+        <ScreenCard
+          mode={match(loadingState)
+            .returnType<"ready" | "loading">()
+            .with("success", () => "ready")
+            .with("loading", () => "loading")
+            .exhaustive()}
+          finalHeight={breakpointName === "large" ? 140 : 248}
+        >
+          {loadingState === "success"
+            ? (
+              <EarnPositionSummary
+                earnPosition={earnPosition.data ?? null}
+                branchId={branch.id}
+              />
+            )
+            : (
+              <>
+                <div
                   className={css({
-                    fontSize: 14,
-                    color: "positive",
-                    whiteSpace: "nowrap",
+                    position: "absolute",
+                    top: 16,
+                    left: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    textTransform: "uppercase",
+                    userSelect: "none",
+                    fontSize: 12,
                   })}
                 >
-                  <Amount value={earnPosition.data.rewards.bold} suffix=" BOLD" />
                   <div
                     className={css({
                       display: "flex",
-                      width: 4,
-                      height: 4,
-                      borderRadius: "50%",
-                      backgroundColor: "dimmed",
                     })}
-                  />
-                  <Amount value={earnPosition.data.rewards.coll} suffix={` ${poolToken.name}`} />
-                </HFlex>
-              ),
-            },
-          ]}
-        />
-      )}
-      <div
-        className={css({
-          display: "flex",
-          flexDirection: "column",
-          gap: 24,
-          width: "100%",
-        })}
-      >
-        <Tabs
-          selected={TABS.indexOf(tab)}
-          onSelect={(index) => {
-            router.push(`/earn/${collateralSymbol.toLowerCase()}/${TABS[index].action}`, {
-              scroll: false,
-            });
-          }}
-          items={TABS.map((tab) => ({
-            label: tab.label,
-            panelId: `panel-${tab.action}`,
-            tabId: `tab-${tab.action}`,
-          }))}
-        />
-        {tab.action === "deposit" && (
-          <DepositPanel
-            accountBoldBalance={boldBalance.data}
-            collIndex={collIndex}
-            boldQty={stabilityPool.data.totalDeposited ?? dn.from(0, 18)}
-            position={earnPosition.data ?? undefined}
-          />
-        )}
-        {tab.action === "withdraw" && (
-          <WithdrawPanel
-            collIndex={collIndex}
-            boldQty={stabilityPool.data.totalDeposited ?? dn.from(0, 18)}
-            position={earnPosition.data ?? undefined}
-          />
-        )}
-        {tab.action === "claim" && (
-          <RewardsPanel
-            collIndex={collIndex}
-            position={earnPosition.data ?? undefined}
-          />
-        )}
-      </div>
-    </Screen>
-  );
-}
-
-function PoolSummary({
-  apr,
-  boldQty,
-  symbol,
-}: {
-  apr: Dnum;
-  boldQty: Dnum;
-  symbol: CollateralSymbol;
-}) {
-  const poolToken = TOKENS_BY_SYMBOL[symbol];
-  return (
-    <div
+                  >
+                    <IconEarn size={16} />
+                  </div>
+                  <HFlex gap={8}>
+                    Fetching {collToken.name} Stability Pool…
+                    <Spinner size={18} />
+                  </HFlex>
+                </div>
+              </>
+            )}
+        </ScreenCard>
+      }
       className={css({
-        display: "flex",
-        width: "100%",
-        justifyContent: "space-between",
+        position: "relative",
       })}
     >
-      <div
-        className={css({
-          display: "flex",
-          width: "100%",
-          gap: 24,
-        })}
-      >
-        <div
-          className={css({
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-            paddingTop: 8,
-          })}
-        >
-          <TokenIconGroup size="large">
-            <TokenIcon symbol="BOLD" />
-            <TokenIcon symbol={symbol} />
-          </TokenIconGroup>
-        </div>
-        <div
-          className={css({
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          })}
-        >
-          <div
-            className={css({
-              fontSize: 24,
-            })}
-          >
-            {poolToken.name} pool
-          </div>
-          <div
+      {tabsTransition((style, item) => (
+        item === "success" && (
+          <a.div
             className={css({
               display: "flex",
-              alignItems: "center",
-              gap: 4,
-              color: "contentAlt",
-              whiteSpace: "nowrap",
+              flexDirection: "column",
+              gap: 24,
+              width: "100%",
             })}
+            style={{
+              opacity: style.opacity,
+            }}
           >
-            <div>
-              {content.earnScreen.headerTvl(
-                <Amount
-                  format="compact"
-                  suffix=" BOLD"
-                  value={boldQty}
-                />,
-              )}
-            </div>
-            <InfoTooltip {...infoTooltipProps(content.earnScreen.infoTooltips.tvl(poolToken.name))} />
-          </div>
-        </div>
-      </div>
-      <div
-        className={css({
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "flex-end",
-        })}
-      >
-        <div
-          className={css({
-            fontSize: 24,
-          })}
-        >
-          <Amount
-            format={2}
-            percentage
-            value={apr}
-          />
-        </div>
-        <div
-          className={css({
-            color: "contentAlt",
-            whiteSpace: "nowrap",
-          })}
-        >
-          {content.earnScreen.headerApr()}
-        </div>
-      </div>
-    </div>
+            <Tabs
+              selected={TABS.indexOf(tab)}
+              onSelect={(index) => {
+                const tab = TABS[index];
+                if (!tab) {
+                  throw new Error("Invalid tab index");
+                }
+                router.push(`/earn/${collateralSymbol.toLowerCase()}/${tab.action}`, {
+                  scroll: false,
+                });
+              }}
+              items={TABS.map((tab) => ({
+                label: tab.label,
+                panelId: `panel-${tab.action}`,
+                tabId: `tab-${tab.action}`,
+              }))}
+            />
+            {tab.action === "deposit" && (
+              <PanelUpdateDeposit
+                branchId={branch.id}
+                deposited={earnPool.data?.totalDeposited ?? dn.from(0, 18)}
+                position={earnPosition.data ?? undefined}
+              />
+            )}
+            {tab.action === "claim" && (
+              <PanelClaimRewards
+                branchId={branch.id}
+                position={earnPosition.data ?? undefined}
+              />
+            )}
+          </a.div>
+        )
+      ))}
+    </Screen>
   );
 }

@@ -1,33 +1,41 @@
-import type { ComponentPropsWithRef } from "react";
+"use client";
+
+import type { ComponentPropsWithRef, ComponentType } from "react";
 import type { ButtonProps } from "./Button";
 
-import { forwardRef } from "react";
+import { createElement } from "react";
 import { useButtonStyles } from "./Button";
 
-export const AnchorButton = forwardRef<HTMLAnchorElement, ComponentPropsWithRef<"a"> & ButtonProps>(
-  function AnchorButton({
-    size = "medium",
-    label,
-    maxWidth,
-    wide,
-    mode = "secondary",
-    ...props
-  }, ref) {
-    const buttonStyles = useButtonStyles(size, mode);
-    return (
-      <a
-        ref={ref}
-        className={buttonStyles.className}
-        style={{
-          display: "inline-flex",
-          maxWidth,
-          width: wide ? "100%" : undefined,
-          ...buttonStyles.styles,
-        }}
-        {...props}
-      >
-        {label}
-      </a>
-    );
-  },
-);
+export function AnchorButton({
+  AnchorComponent,
+  external,
+  label,
+  maxWidth,
+  mode = "secondary",
+  ref,
+  shape,
+  size = "medium",
+  wide,
+  ...props
+}: ComponentPropsWithRef<"a"> & ButtonProps & {
+  AnchorComponent?: ComponentType<ComponentPropsWithRef<"a">>;
+  external?: boolean;
+}) {
+  const buttonStyles = useButtonStyles({ mode, shape, size });
+  const externalProps = !external ? {} : {
+    target: "_blank",
+    rel: "noopener noreferrer",
+  };
+  return createElement(AnchorComponent ?? "a", {
+    ref,
+    className: buttonStyles.className,
+    style: {
+      display: "inline-flex",
+      maxWidth,
+      width: wide ? "100%" : undefined,
+      ...buttonStyles.styles,
+    },
+    ...externalProps,
+    ...props,
+  }, label);
+}

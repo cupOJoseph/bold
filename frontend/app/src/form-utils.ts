@@ -1,6 +1,6 @@
 import type { Dnum } from "dnum";
 
-import { ADDRESS_ZERO, isAddress } from "@/src/eth-utils";
+import { ADDRESS_ZERO, isAddress } from "@liquity2/uikit";
 import * as dn from "dnum";
 import { useMemo, useRef, useState } from "react";
 
@@ -82,7 +82,7 @@ export function useForm<Form extends Record<string, FormValue<unknown>>>(
           }));
         }
       },
-      value: form[name][0],
+      value: form[name]?.[0] as string, // type guard, should never be undefined
     };
   }
 
@@ -98,7 +98,10 @@ export function useForm<Form extends Record<string, FormValue<unknown>>>(
     setForm((form) => {
       const newForm: Record<string, FormValue<unknown>> = { ...form };
       for (const [name, value] of Object.entries(values)) {
-        const parser = newForm[name][2];
+        const parser = newForm[name]?.[2];
+        if (!parser) {
+          throw new Error(`No parser found for field ${name}`);
+        }
         newForm[name] = [value, parser(value), parser];
       }
       return { ...form, ...newForm };
@@ -124,10 +127,14 @@ export function useInputFieldValue(
     defaultValue = "",
     onChange,
     onFocusChange,
+    parse = parseInputFloat,
+    validate = (parsed, value) => ({ parsed, value }),
   }: {
     defaultValue?: string;
     onChange?: (data: InputFieldUpdateData) => void;
     onFocusChange?: (data: InputFieldUpdateData) => void;
+    parse?: (value: string) => Dnum | null;
+    validate?: (parsed: Dnum | null, value: string) => { parsed: Dnum | null; value: string };
   } = {},
 ) {
   const [{ value, focused, parsed }, set] = useState<{
@@ -137,14 +144,19 @@ export function useInputFieldValue(
   }>({
     value: defaultValue,
     focused: false,
-    parsed: parseInputFloat(defaultValue),
+    parsed: parse(defaultValue),
   });
 
   const ref = useRef<HTMLInputElement>(null);
 
   return useMemo(() => {
     const setValue = (value: string) => {
-      const parsed = parseInputFloat(value);
+      let parsed = parse(value);
+
+      const result = validate(parsed, value);
+      parsed = result.parsed;
+      value = result.value;
+
       set((s) => ({ ...s, parsed, value }));
       onChange?.({ focused, parsed, value });
     };

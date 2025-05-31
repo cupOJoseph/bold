@@ -1,7 +1,8 @@
 import type { CollateralToken } from "@liquity2/uikit";
 import type { Dnum } from "dnum";
+import type { ComponentPropsWithoutRef } from "react";
 
-import { LEVERAGE_FACTOR_MIN, LEVERAGE_FACTOR_SUGGESTIONS, LTV_RISK, MAX_LTV_ALLOWED } from "@/src/constants";
+import { LEVERAGE_FACTOR_MIN, LEVERAGE_FACTOR_SUGGESTIONS, LTV_RISK, MAX_LTV_ALLOWED_RATIO } from "@/src/constants";
 import content from "@/src/content";
 import { useInputFieldValue } from "@/src/form-utils";
 import { fmtnum } from "@/src/formatting";
@@ -17,36 +18,48 @@ import { roundToDecimal } from "@/src/utils";
 import { css } from "@/styled-system/css";
 import { HFlex, InfoTooltip, InputField, lerp, norm, Slider } from "@liquity2/uikit";
 import * as dn from "dnum";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 export function LeverageField({
   collPrice,
   collToken,
   debt,
   deposit,
+  drawer,
   highRiskLeverageFactor,
+  inputId: inputIdFromProps,
   leverageFactor,
   liquidationPriceField,
   liquidationRisk,
   maxLeverageFactorAllowed,
   mediumRiskLeverageFactor,
+  onDrawerClose,
   sliderProps,
 }: ReturnType<typeof useLeverageField> & {
   disabled?: boolean;
+  drawer?: ComponentPropsWithoutRef<typeof InputField>["drawer"];
+  inputId?: string;
+  onDrawerClose?: ComponentPropsWithoutRef<typeof InputField>["onDrawerClose"];
 }) {
+  const autoInputId = useId();
+  const inputId = inputIdFromProps ?? autoInputId;
+
   const isDepositNegative = !deposit || dn.lt(deposit, 0);
+
   return (
     <InputField
+      id={inputId}
       secondarySpacing={16}
       disabled={isDepositNegative}
+      drawer={drawer}
+      onDrawerClose={onDrawerClose}
       contextual={
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 300,
-            marginRight: -20,
+            width: 260,
           }}
         >
           <Slider
@@ -76,7 +89,7 @@ export function LeverageField({
                     fontVariantNumeric: "tabular-nums",
                   })}
                 >
-                  {dn.format(debt, { digits: 2, trailingZeros: true })}
+                  {fmtnum(debt)}
                 </span>
                 {" BOLD"}
               </>
@@ -95,13 +108,13 @@ export function LeverageField({
                 color: "content",
               })}
             >
-              ${fmtnum(collPrice, "2z")}
+              {fmtnum(collPrice, { preset: "2z", prefix: "$" })}
             </span>
           </span>
         ),
         end: (
           <HFlex gap={8}>
-            Leverage {
+            Multiply {
               <span
                 style={{
                   color: liquidationRisk === "high"
@@ -137,7 +150,7 @@ export function useLeverageField({
   collPrice,
   collToken,
   depositPreLeverage,
-  maxLtvAllowedRatio = MAX_LTV_ALLOWED,
+  maxLtvAllowedRatio = MAX_LTV_ALLOWED_RATIO,
   onFocusChange,
 }: {
   collPrice: Dnum;
@@ -155,6 +168,10 @@ export function useLeverageField({
 
   const maxLtvAllowed = dn.mul(maxLtv, maxLtvAllowedRatio);
   const maxLeverageFactorAllowed = getLeverageFactorFromLtv(maxLtvAllowed);
+
+  if (!LEVERAGE_FACTOR_SUGGESTIONS[0]) {
+    throw new Error("LEVERAGE_FACTOR_SUGGESTIONS must have at least one suggestion set");
+  }
 
   const [leverageFactor, setLeverageFactor] = useState(
     getLeverageFactorFromRatio(
@@ -174,7 +191,7 @@ export function useLeverageField({
   const liquidationPriceBoundaries = [
     getLiquidationPriceFromLeverage(LEVERAGE_FACTOR_MIN, collPrice, collateralRatio),
     getLiquidationPriceFromLeverage(maxLeverageFactor, collPrice, collateralRatio),
-  ];
+  ] as const;
 
   const deposit = depositPreLeverage && leverageFactor > 1
     ? dn.mul(depositPreLeverage, leverageFactor)
@@ -211,7 +228,7 @@ export function useLeverageField({
   }, [maxLeverageFactor]);
 
   const liquidationPriceField = useInputFieldValue(
-    (value) => `$ ${dn.format(value, { digits: 2, trailingZeros: true })}`,
+    (value) => fmtnum(value, { dust: false, prefix: "$ ", preset: "2z" }),
     {
       onChange: ({ parsed: liquidationPrice, focused }) => {
         if (liquidationPrice && dn.gt(liquidationPrice, 0) && liquidationPriceField.isFocused && focused) {
@@ -320,6 +337,6 @@ export function useLeverageField({
 function getLeverageFactorFromRatio(minLeverageFactor: number, maxLeverageFactor: number, ratio: number) {
   return Math.max(
     LEVERAGE_FACTOR_MIN,
-    Math.round(lerp(minLeverageFactor, maxLeverageFactor, ratio)) * 10,
-  ) / 10;
+    Math.round(lerp(minLeverageFactor, maxLeverageFactor, ratio) * 10) / 10,
+  );
 }

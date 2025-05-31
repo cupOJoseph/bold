@@ -1,29 +1,15 @@
-type Collateral @entity {
-  id: ID!
+type Collateral @entity(immutable: false) {
+  id: ID! # "collIndex", e.g. "0"
   collIndex: Int!
-  token: Token!
   minCollRatio: BigInt!
   troves: [Trove!]! @derivedFrom(field: "collateral")
   addresses: CollateralAddresses! @derivedFrom(field: "collateral")
-  stabilityPoolDeposits: [StabilityPoolDeposit!]!
-  @derivedFrom(field: "collateral")
-  totalDeposited: BigInt!
-  totalDebt: BigInt!
-  price: BigInt!
-}
-
-type Token @entity(immutable: true) {
-  id: ID!
-  collateral: Collateral!
-  name: String!
-  symbol: String!
-  decimals: Int!
 }
 
 type CollateralAddresses @entity(immutable: true) {
-  id: ID!
-  borrowerOperations: Bytes!
+  id: ID! # "collIndex", e.g. "0"
   collateral: Collateral!
+  borrowerOperations: Bytes!
   sortedTroves: Bytes!
   stabilityPool: Bytes!
   token: Bytes!
@@ -31,42 +17,73 @@ type CollateralAddresses @entity(immutable: true) {
   troveNft: Bytes!
 }
 
-type InterestRateBracket @entity {
-  id: ID!
+type InterestRateBracket @entity(immutable: false) {
+  id: ID! # "collIndex:rateFloored", e.g. "0:44000000000000000"
+  collateral: Collateral!
   rate: BigInt!
   totalDebt: BigInt!
-  totalTroves: Int!
 }
 
-type Trove @entity {
-  id: ID!
-  troveId: String!
+enum TroveStatus {
+  active
+  closed
+  liquidated
+  redeemed
+}
+
+type Trove @entity(immutable: false) {
+  id: ID! # "collIndex:collId", e.g. 0:0x1731afc858cad2708001a4f71851f9f775729c22f47df7c4360b1e416fd0f2de
   borrower: Bytes!
+  collateral: Collateral!
+  closedAt: BigInt
+  createdAt: BigInt!
+  mightBeLeveraged: Boolean!
+  status: TroveStatus!
+  updatedAt: BigInt!
   debt: BigInt!
   deposit: BigInt!
-  stake: BigInt!
+  interestBatch: InterestBatch
   interestRate: BigInt!
-  createdAt: BigInt!
-  closedAt: BigInt
-  collateral: Collateral!
+  stake: BigInt!
+  troveId: String!
 }
 
-type BorrowerInfo @entity {
-  id: ID!
+type BorrowerInfo @entity(immutable: false) {
+  id: ID! # "borrowerAddress", e.g. "0x0000000000000000000000000000000000000000"
+  nextOwnerIndexes: [Int!]!
   troves: Int!
   trovesByCollateral: [Int!]!
 }
 
-type StabilityPool @entity {
-  id: ID!
-  totalDeposited: BigInt!
+type InterestBatch @entity(immutable: false) {
+  id: ID! # "collIndex:batchManager", e.g. "0:0x0000000000000000000000000000000000000000"
+  collateral: Collateral!
+  batchManager: Bytes!
+  debt: BigInt!
+  coll: BigInt!
+  annualInterestRate: BigInt!
+  annualManagementFee: BigInt!
+  troves: [Trove!]! @derivedFrom(field: "interestBatch")
 }
 
-type StabilityPoolDeposit @entity {
-  id: ID!
-  boldGain: BigInt!
-  collGain: BigInt!
-  collateral: Collateral!
-  deposit: BigInt!
-  depositor: Bytes!
+type GovernanceUser @entity(immutable: false) {
+  id: ID! # "userAddress", e.g. "0x0000000000000000000000000000000000000000"
+  allocated: [Bytes!]!
+  allocatedLQTY: BigInt!
+  stakedLQTY: BigInt!
+  stakedOffset: BigInt!
+  allocations: [GovernanceAllocation!]! @derivedFrom(field: "user")
+}
+
+type GovernanceAllocation @entity(immutable: false) {
+  id: ID! # "initiativeAddress:userAddress", e.g. "0x0000000000000000000000000000000000000000:0x0000000000000000000000000000000000000000"
+  user: GovernanceUser!
+  initiative: GovernanceInitiative!
+  voteLQTY: BigInt!
+  vetoLQTY: BigInt!
+  atEpoch: BigInt!
+}
+
+type GovernanceInitiative @entity(immutable: false) {
+  id: ID! # "initiativeAddress", e.g. "0x0000000000000000000000000000000000000000"
 }

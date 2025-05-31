@@ -1,7 +1,7 @@
-import type { RiskLevel } from "@/src/types";
+import type { LoanDetails, RiskLevel } from "@/src/types";
 import type { Dnum } from "dnum";
 
-import { LTV_RISK, MAX_LTV_ALLOWED, REDEMPTION_RISK } from "@/src/constants";
+import { LTV_RISK, MAX_LTV_ALLOWED_RATIO, REDEMPTION_RISK } from "@/src/constants";
 import * as dn from "dnum";
 import { match, P } from "ts-pattern";
 
@@ -102,31 +102,6 @@ export function getLtv(
   return dn.gt(depositUsd, 0) ? dn.div(debt, depositUsd) : null;
 }
 
-export type LoanDetails = {
-  collPrice: Dnum | null;
-  debt: Dnum | null;
-  deposit: Dnum | null;
-  depositPreLeverage: Dnum | null;
-  depositToZero: Dnum | null;
-  depositUsd: Dnum | null;
-  interestRate: Dnum | null;
-  leverageFactor: number | null;
-  liquidationPrice: Dnum | null;
-  liquidationRisk: RiskLevel | null;
-  ltv: Dnum | null;
-  maxDebt: Dnum | null;
-  maxDebtAllowed: Dnum | null;
-  maxLtv: Dnum;
-  maxLtvAllowed: Dnum;
-  redemptionRisk: RiskLevel | null;
-  status:
-    | null
-    | "healthy"
-    | "at-risk" // above the max LTV allowed by the app when opening
-    | "liquidatable" // above the max LTV before liquidation
-    | "underwater"; // above 100% LTV
-};
-
 export function getLoanDetails(
   deposit: Dnum | null,
   debt: Dnum | null,
@@ -135,7 +110,7 @@ export function getLoanDetails(
   collPrice: Dnum | null,
 ): LoanDetails {
   const maxLtv = dn.div(dn.from(1, 18), minCollRatio);
-  const maxLtvAllowed = dn.mul(maxLtv, MAX_LTV_ALLOWED);
+  const maxLtvAllowed = dn.mul(maxLtv, MAX_LTV_ALLOWED_RATIO);
   const depositUsd = deposit && collPrice ? dn.mul(deposit, collPrice) : null;
 
   const ltv = debt && depositUsd && !dn.eq(depositUsd, 0)

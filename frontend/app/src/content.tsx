@@ -1,15 +1,28 @@
+/* oxlint-disable react/jsx-key */
+
 import type { ReactNode as N } from "react";
 
-// eslint-disable-next-line import/no-anonymous-default-export
+import { css } from "@/styled-system/css";
+
 export default {
   // Used in the top bar and other places
-  appName: "Liquity v2",
+  appName: "Liquity V2",
+  appDescription: `
+    Liquity V2 is a new borrowing protocol that lets users
+    deposit ETH or LSTs as collateral and mint the stablecoin BOLD.
+  `,
+  appUrl: typeof window === "undefined"
+    ? "https://www.liquity.org/"
+    : window.location.origin,
+  appIcon: (
+    typeof window === "undefined" ? "" : window.location.origin
+  ) + "/favicon.svg",
 
   // Menu bar
   menu: {
     dashboard: "Dashboard",
     borrow: "Borrow",
-    leverage: "Leverage",
+    multiply: "Multiply",
     earn: "Earn",
     stake: "Stake",
   },
@@ -22,38 +35,164 @@ export default {
   generalInfotooltips: {
     loanLiquidationRisk: [
       "Liquidation risk",
-      "If your collateral becomes undercollateralized, it can be liquidated. Your debt is paid off but you lose most of your collateral. Increase your deposit or decrease your loan to lower the risk.",
+      <>
+        If the LTV of a loan goes above the max LTV, it becomes undercollateralized and will be liquidated. In that
+        case, the borrower's debt is paid off but they lose most of their collateral. In order to avoid liquidation, one
+        can increase the collateral or reduce the debt.
+      </>,
     ],
     loanRedemptionRisk: [
       "Redemption risk",
       <>
-        If BOLD trades below $1, your collateral may be{" "}
-        <a
-          href="https://docs.liquity.org/faq/lusd-redemptions"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          redeemed
-        </a>. Redemptions start from the lowest interest rate loans. Raise the interest rate on your loan to reduce the
-        risk.
+        Users paying the lowest interest rate can get redeemed, if the price of BOLD falls below $1. By raising your
+        interest rate, you reduce this risk.
       </>,
     ],
     loanLtv: [
       "Loan-to-value ratio",
-      "The ratio between your deposited collateral and the amount of BOLD you have chosen to borrow.",
+      <>
+        The ratio between the amount of BOLD borrowed and the deposited collateral (in USD).
+      </>,
     ],
     loanMaxLtv: [
-      "Maximum loan-to-value ratio",
-      "The maximum ratio between your collateral and the BOLD that you mint allowed at origination.",
+      "Maximum Loan-To-Value (LTV) Ratio",
+      <>
+        The maximum ratio between the USD value of a loan (in BOLD) and the collateral backing it. The LTV will
+        fluctuate as the price of the collateral changes. To decrease the LTV add more colateral or reduce debt.
+      </>,
     ],
     loanLiquidationPrice: [
       "Liquidation price",
-      "The collateral price at which your position would be liquidated.",
+      <>The collateral price at which a loan can be liquidated.</>,
     ],
     ethPrice: [
-      "ETH price",
-      "The current price of ETH in USD, as reported by the oracle. This is used to determine the loan-to-value ratio of your loan.",
+      "ETH Price",
+      <>
+        The current price of ETH, as reported by the oracle. The ETH price is used to calculate the Loan-To-Value (LTV)
+        ratio of a loan.
+      </>,
     ],
+    interestRateBoldPerYear: [
+      "Interest rate",
+      <>
+        The annualized interest amount in BOLD for the selected interest rate. The accumulated interest is added to the
+        loan.
+      </>,
+    ],
+    interestRateAdjustment: [
+      "Interest rate adjustment",
+      <>
+        The interest rate can be adjusted at any time. If it is adjusted within less than seven days of the last
+        adjustment, there is a fee.
+      </>,
+    ],
+    redeemedLoan: {
+      heading: "Your collateral and debt are reduced by the same value.",
+      body: (
+        <>
+          When BOLD trades for under $1, anyone can redeem positions to get BOLD back at $1. Positions with the lowest
+          interest rate get redeemed first.
+        </>
+      ),
+      footerLink: {
+        href: "https://docs.liquity.org/v2-faq/redemptions-and-delegation",
+        label: "Learn more",
+      },
+    },
+  },
+
+  // Redemption info box
+  redemptionInfo: {
+    title: "Redemptions in a nutshell",
+    subtitle: (
+      <>
+        Redemptions help maintain BOLD’s peg in a decentralized way. If a user is redeemed, their collateral and debt
+        are reduced equally, resulting in no net loss.
+      </>
+    ),
+    infoItems: [
+      {
+        icon: "bold",
+        text: "Redemptions occur when BOLD drops below $1.",
+      },
+      {
+        icon: "redemption",
+        text: "Redemptions first affect loans with the lowest interest rate.",
+      },
+      {
+        icon: "interest",
+        text: "Raising the interest rate reduces your redemption risk.",
+      },
+    ],
+    learnMore: {
+      text: "Learn more about redemptions",
+      href: "https://docs.liquity.org/v2-faq/redemptions-and-delegation",
+    },
+  },
+
+  interestRateField: {
+    delegateModes: {
+      manual: {
+        label: "Manual",
+        secondary: <>The interest rate is set manually and can be updated at any time.</>,
+      },
+      delegate: {
+        label: "Delegated",
+        secondary: <>The interest rate is set and updated by a third party of your choice. They may charge a fee.</>,
+      },
+      strategy: {
+        label: "Autonomous Rate Manager",
+        secondary: (
+          <>
+            The interest rate is set and updated by an automated strategy running on the Internet Computer (ICP).
+          </>
+        ),
+      },
+    },
+
+    icStrategyModal: {
+      title: (
+        <>
+          Autonomous Rate Manager (ARM)
+        </>
+      ),
+      intro: (
+        <>
+          These strategies are run on the Internet Computer (ICP). They are automated and decentralized. More strategies
+          may be added over time.
+        </>
+      ),
+    },
+
+    delegatesModal: {
+      title: "Set a delegate",
+      intro: (
+        <>
+          The interest rate is set and updated by a third party of your choice. They may charge a fee.
+        </>
+      ),
+    },
+  },
+
+  closeLoan: {
+    claimOnly: (
+      <>
+        You are reclaiming your collateral and closing the position. The deposit will be returned to your wallet.
+      </>
+    ),
+    repayWithBoldMessage: (
+      <>
+        You are repaying your debt and closing the position. The deposit will be returned to your wallet.
+      </>
+    ),
+    repayWithCollateralMessage: (
+      <>
+        To close your position, a part of your collateral will be sold to pay back the debt. The rest of your collateral
+        will be returned to your wallet.
+      </>
+    ),
+    buttonRepayAndClose: "Repay & close",
+    buttonReclaimAndClose: "Reclaim & close",
   },
 
   // Home screen
@@ -62,20 +201,20 @@ export default {
     myPositionsTitle: "My positions",
     actions: {
       borrow: {
-        title: "Borrow BOLD",
-        description: "Set your own interest rate and borrow BOLD against ETH and staked ETH.",
+        title: "Borrow",
+        description: "Mint BOLD against your collateral at whatever interest rate you want",
       },
-      leverage: {
-        title: "Leverage ETH",
-        description: "Set your own interest rate and increase your exposure to ETH and staked ETH.",
+      multiply: {
+        title: "Multiply",
+        description: "Increase your exposure to ETH and its staking yield with a single click",
       },
       earn: {
         title: "Earn with BOLD",
-        description: "Cover liquidations to earn BOLD and collateral assets.",
+        description: "Deposit BOLD to earn protocol revenues and liquidation proceeds",
       },
       stake: {
         title: "Stake LQTY",
-        description: "Accrue voting power by staking your LQTY without a minimum lockup period.",
+        description: "Direct protocol incentives with LQTY while earning from Liquity V1",
       },
     },
     statsBar: {
@@ -102,16 +241,16 @@ export default {
 
   // Borrow screen
   borrowScreen: {
-    headline: (tokensIcons: N, boldIcon: N) => (
+    headline: (eth: N, bold: N) => (
       <>
-        Borrow {boldIcon} BOLD with {tokensIcons} ETH
+        Borrow {bold} with {eth}
       </>
     ),
     depositField: {
-      label: "You deposit",
+      label: "Collateral",
     },
     borrowField: {
-      label: "You borrow",
+      label: "Loan",
     },
     liquidationPriceField: {
       label: "ETH liquidation price",
@@ -119,22 +258,19 @@ export default {
     interestRateField: {
       label: "Interest rate",
     },
-    action: "Open loan",
+    action: "Next: Summary",
     infoTooltips: {
       interestRateSuggestions: [
         "Positions with lower interest rates are the first to be redeemed by BOLD holders.",
-      ],
-      interestRateBoldPerYear: [
-        "Your annualized interest burden at your selected position rate.",
       ],
     },
   },
 
-  // Leverage screen
+  // Multiply screen
   leverageScreen: {
     headline: (tokensIcons: N) => (
       <>
-        Leverage your exposure to {tokensIcons}
+        Multiply your exposure to {tokensIcons}
       </>
     ),
     depositField: {
@@ -146,33 +282,45 @@ export default {
     interestRateField: {
       label: "Interest rate",
     },
-    action: "Open leveraged loan",
+    action: "Next: Summary",
     infoTooltips: {
       leverageLevel: [
-        "Leverage level",
-        "Choose the amplification of your exposure. Note that a higher level means higher liquidation risk. You are responsible for your own assessment of what a suitable level is.",
+        "Multiply level",
+        <>
+          Choose the amplification of your exposure. Note that a higher level means higher liquidation risk. You are
+          responsible for your own assessment of what a suitable level is.
+        </>,
       ],
       interestRateSuggestions: [
-        "Positions with lower interest rates are the first to be redeemed by BOLD holders.",
-      ],
-      interestRateBoldPerYear: [
-        "Your annualized interest burden at your selected position rate.",
+        <>
+          Positions with lower interest rates are the first to be redeemed by BOLD holders.
+        </>,
       ],
       exposure: [
         "Exposure",
-        "Your total exposure to the collateral asset after amplification.",
+        <>
+          Your total exposure to the collateral asset after amplification.
+        </>,
       ],
     },
   },
 
   // Earn home screen
   earnHome: {
-    headline: (tokensIcons: N, boldIcon: N) => (
+    headline: (rewards: N, bold: N) => (
       <>
-        Earn {tokensIcons} with {boldIcon} BOLD
+        Deposit
+        <NoWrap>{bold} BOLD</NoWrap>
+        to earn <NoWrap>rewards {rewards}</NoWrap>
       </>
     ),
-    subheading: "Get BOLD and extra ETH rewards from liquidations",
+    subheading: (
+      <>
+        A BOLD deposit in a stability pool earns rewards from the fees that users pay on their loans. Also, the BOLD may
+        be swapped to collateral in case the system needs to liquidate positions.
+      </>
+    ),
+    learnMore: ["https://docs.liquity.org/v2-faq/bold-and-earn", "Learn more"],
     poolsColumns: {
       pool: "Pool",
       apr: "APR",
@@ -206,40 +354,44 @@ export default {
     },
     tabs: {
       deposit: "Deposit",
-      withdraw: "Withdraw",
       claim: "Claim rewards",
     },
     depositPanel: {
-      label: "You deposit",
-      shareLabel: "New pool share",
-      claimCheckbox: "Also claim rewards",
-      action: "Add deposit",
-      actionClaim: "Add deposit and claim rewards",
+      label: "Increase deposit",
+      shareLabel: "Pool share",
+      claimCheckbox: "Claim rewards",
+      action: "Next: Summary",
     },
     withdrawPanel: {
-      label: "You withdraw",
-      claimCheckbox: "Also claim rewards",
-      action: "Withdraw",
-      actionClaim: "Withdraw and claim rewards",
+      label: "Decrease deposit",
+      claimCheckbox: "Claim rewards",
+      action: "Next: Summary",
     },
     rewardsPanel: {
-      label: "You claim",
-      details: (usdAmount: N, fee: N) => (
-        <>
-          ~${usdAmount} • Expected gas fee ~${fee}
-        </>
-      ),
-      action: "Claim rewards",
+      boldRewardsLabel: "Your earnings from protocol revenue distributions to this stability pool",
+      collRewardsLabel: "Your proceeds from liquidations conducted by this stability pool",
+      totalUsdLabel: "Total in USD",
+      expectedGasFeeLabel: "Expected gas fee",
+      action: "Next: Summary",
     },
     infoTooltips: {
       tvl: (collateral: N) => [
         <>Total BOLD covering {collateral}-backed position liquidations.</>,
       ],
       depositPoolShare: [
-        "Ratio of your BOLD deposits versus the total stability pool.",
+        "Percentage of your BOLD deposit compared to the total deposited in this stability pool.",
       ],
-      alsoClaimRewardsCheckbox: [
-        "Trigger a payout of your accrued BOLD and ETH rewards.",
+      alsoClaimRewardsDeposit: [
+        <>
+          If checked, rewards are paid out as part of the update transaction. Otherwise rewards will be compounded into
+          your deposit.
+        </>,
+      ],
+      alsoClaimRewardsWithdraw: [
+        <>
+          If checked, rewards are paid out as part of the update transaction.<br />
+          Note: This needs to be checked to fully withdraw from the Stability Pool.
+        </>,
       ],
       currentApr: [
         "Average annualized return for BOLD deposits over the past 7 days.",
@@ -257,13 +409,19 @@ export default {
 
   // Stake screen
   stakeScreen: {
-    header: (lqtyIcon: N, lusdEthIcons: N) => (
+    headline: (lqtyIcon: N) => (
       <>
         <span>Stake</span>
         {lqtyIcon} <span>LQTY & get</span>
-        {lusdEthIcons} <span>LUSD + ETH</span>
+        <span>voting power</span>
       </>
     ),
+    subheading: (
+      <>
+        By staking LQTY you can vote on incentives for Liquity V2, while still earning Liquity V1 fees.
+      </>
+    ),
+    learnMore: ["https://docs.liquity.org/faq/staking", "Learn more"],
     accountDetails: {
       myDeposit: "My deposit",
       votingPower: "Voting power",
@@ -275,20 +433,15 @@ export default {
       unclaimed: "Unclaimed rewards",
     },
     tabs: {
-      deposit: "Deposit",
-      withdraw: "Withdraw",
-      claim: "Claim rewards",
+      deposit: "Staking",
+      rewards: "Rewards",
+      voting: "Voting",
     },
     depositPanel: {
-      label: "You deposit",
-      shareLabel: "New pool share",
-      claimCheckbox: "Also claim rewards",
-      action: "Add deposit",
-    },
-    withdrawPanel: {
-      label: "You withdraw",
-      claimCheckbox: "Also claim rewards",
-      action: "Withdraw",
+      label: "Deposit",
+      shareLabel: "Pool share",
+      rewardsLabel: "Available rewards",
+      action: "Next: Summary",
     },
     rewardsPanel: {
       label: "You claim",
@@ -297,7 +450,64 @@ export default {
           ~${usdAmount} • Expected gas fee ~${fee}
         </>
       ),
-      action: "Claim rewards",
+      action: "Next: Summary",
+    },
+    votingPanel: {
+      title: "Allocate your voting power",
+      intro: (
+        <>
+          Direct incentives from Liquity V2 protocol revenues towards liquidity providers for BOLD. Upvote from Thursday
+          to Tuesday. Downvote all week. <Link href="https://docs.liquity.org/v2-faq/lqty-staking">Learn more</Link>
+        </>
+      ),
+    },
+    infoTooltips: {
+      alsoClaimRewardsDeposit: [
+        <>
+          Rewards will be paid out as part of the update transaction.
+        </>,
+      ],
     },
   },
-};
+} as const;
+
+function Link({
+  href,
+  children,
+}: {
+  href: string;
+  children: N;
+}) {
+  const props = !href.startsWith("http") ? {} : {
+    target: "_blank",
+    rel: "noopener noreferrer",
+  };
+  return (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  );
+}
+
+function NoWrap({
+  children,
+  gap = 8,
+}: {
+  children: N;
+  gap?: number;
+}) {
+  return (
+    <span
+      className={css({
+        display: "inline-flex",
+        alignItems: "center",
+        whiteSpace: "nowrap",
+      })}
+      style={{
+        gap,
+      }}
+    >
+      {children}
+    </span>
+  );
+}

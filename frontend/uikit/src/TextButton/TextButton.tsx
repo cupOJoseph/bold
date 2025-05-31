@@ -1,23 +1,28 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+"use client";
 
-import { forwardRef } from "react";
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
+
 import { css, cx } from "../../styled-system/css";
 
 export type TextButtonProps = {
   label: ReactNode;
-  size?: "medium" | "large";
+  size?: "small" | "medium" | "large";
 };
 
-export const TextButton = forwardRef<
-  HTMLButtonElement,
-  ComponentPropsWithoutRef<"button"> & TextButtonProps
->(function TextButton({
-  label,
+export function TextButton({
   className,
-  style,
+  label,
+  ref,
   size,
+  style,
   ...props
-}, ref) {
+}:
+  & ComponentPropsWithoutRef<"button">
+  & TextButtonProps
+  & {
+    ref?: Ref<HTMLButtonElement>;
+  })
+{
   const textButtonStyles = useTextButtonStyles(size);
   return (
     <button
@@ -35,7 +40,7 @@ export const TextButton = forwardRef<
       {label}
     </button>
   );
-});
+}
 
 export function useTextButtonStyles(size: TextButtonProps["size"] = "medium") {
   const className = css({
@@ -55,7 +60,11 @@ export function useTextButtonStyles(size: TextButtonProps["size"] = "medium") {
   });
 
   const style = {
-    fontSize: size === "large" ? 24 : 16,
+    fontSize: size === "large"
+      ? 24
+      : size === "small"
+      ? 14
+      : 16,
   };
 
   return {

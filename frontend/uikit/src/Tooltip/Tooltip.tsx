@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import { autoUpdate, offset, shift, useFloating } from "@floating-ui/react-dom";
@@ -31,9 +33,9 @@ export function Tooltip({
     autofocus: false,
   });
 
-  const lastFocused = useRef<HTMLElement | null>();
-  const hideDelayRef = useRef<ReturnType<typeof setTimeout>>();
-  const showDelayRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastFocused = useRef<HTMLElement | null>(undefined);
+  const hideDelayRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showDelayRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const cancel = () => {
     clearTimeout(hideDelayRef.current);

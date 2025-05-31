@@ -1,8 +1,10 @@
+"use client";
+
 import type { ReactNode } from "react";
 
 import { createContext, useContext, useState } from "react";
 
-// The Liquity v2 base color palette, meant
+// The Liquity V2 base color palette, meant
 // to be used by themes rather than directly.
 export const colors = {
   // Blue
@@ -76,14 +78,16 @@ export const colors = {
   // desert
   "desert:50": "#FAF9F7",
   "desert:100": "#EFECE5",
+  "desert:950": "#2C231E",
 
   // White
   "white": "#FFFFFF",
 
   // Brand colors
   "brand:blue": "#405AE5",
-  "brand:green": "#63D77D",
+  "brand:lightBlue": "#6D8AED",
   "brand:darkBlue": "#121B44",
+  "brand:green": "#63D77D",
   "brand:golden": "#F5D93A",
   "brand:cyan": "#95CBF3",
   "brand:coral": "#FB7C59",
@@ -120,6 +124,7 @@ export const lightTheme = {
     hint: "brown:50",
     infoSurface: "desert:50",
     infoSurfaceBorder: "desert:100",
+    infoSurfaceContent: "desert:950",
     dimmed: "gray:400",
     fieldBorder: "gray:100",
     fieldBorderFocused: "gray:300",
@@ -131,12 +136,23 @@ export const lightTheme = {
     strongSurfaceContent: "white",
     strongSurfaceContentAlt: "gray:500",
     strongSurfaceContentAlt2: "gray:100",
+    position: "#2E2E3D",
+    positionContent: "white",
+    positionContentAlt: "gray:500",
     interactive: "blue:950",
     negative: "red:500",
     negativeStrong: "red:600",
     negativeActive: "red:600",
     negativeContent: "white",
     negativeHint: "red:400",
+    negativeSurface: "red:50",
+    negativeSurfaceBorder: "red:100",
+    negativeSurfaceContent: "red:900",
+    negativeSurfaceContentAlt: "red:400",
+    negativeInfoSurface: "red:50",
+    negativeInfoSurfaceBorder: "red:200",
+    negativeInfoSurfaceContent: "red:950",
+    negativeInfoSurfaceContentAlt: "gray:600",
     positive: "green:500",
     positiveAlt: "green:400",
     positiveActive: "green:600",
@@ -147,9 +163,11 @@ export const lightTheme = {
     secondaryContent: "blue:500",
     secondaryHint: "blue:100",
     selected: "blue:500",
+    separator: "gray:50",
     surface: "white",
     tableBorder: "gray:100",
     warning: "yellow:400",
+    warningAlt: "yellow:300",
     disabledBorder: "gray:200",
     disabledContent: "gray:500",
     disabledSurface: "gray:50",
@@ -159,6 +177,7 @@ export const lightTheme = {
     brandDarkBlue: "brand:darkBlue",
     brandDarkBlueContent: "white",
     brandDarkBlueContentAlt: "gray:50",
+    brandLightBlue: "brand:lightBlue",
     brandGolden: "brand:golden",
     brandGoldenContent: "yellow:950",
     brandGoldenContentAlt: "yellow:800",
@@ -166,14 +185,20 @@ export const lightTheme = {
     brandGreenContent: "green:950",
     brandGreenContentAlt: "green:800",
 
-    riskGradient1: "green:400",
+    // colors are resolved so we can animate them
+    riskGradient1: "#63D77D", // green:400
     riskGradient2: "#B8E549",
-    riskGradient3: "yellow:400",
+    riskGradient3: "#F1C91E", // yellow:400
     riskGradient4: "#FFA12B",
-    riskGradient5: "red:500",
+    riskGradient5: "#FB7C59", // red:400
+
+    riskGradientDimmed1: "red:100",
+    riskGradientDimmed2: "yellow:100",
+    riskGradientDimmed3: "green:100",
 
     loadingGradient1: "blue:50",
     loadingGradient2: "blue:100",
+    loadingGradientContent: "blue:400",
 
     // not used yet
     brandCyan: "brand:cyan",

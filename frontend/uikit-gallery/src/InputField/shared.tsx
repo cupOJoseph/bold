@@ -49,7 +49,7 @@ export function InputFieldFixture({
   const labelEnd = match(fixture)
     .with("slider", () => (
       <span>
-        Leverage{" "}
+        Multiply{" "}
         <span
           style={{
             color: leverage > 4 ? "#F36740" : "#2F3037",
@@ -74,7 +74,7 @@ export function InputFieldFixture({
         items={[
           itemRow("ETH", "ETH", "10.00"),
           itemRow("RETH", "rETH", "30.00"),
-          itemRow("STETH", "stETH", "40.00"),
+          itemRow("WSTETH", "wstETH", "40.00"),
         ]}
       />
     ))

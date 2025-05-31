@@ -1,9 +1,13 @@
+"use client";
+
 import type { ReactNode } from "react";
 
-import { UpdatePrices } from "@/src/comps/Debug/UpdatePrices";
-import { ProtocolStats } from "@/src/comps/ProtocolStats/ProtocolStats";
-import { TopBar } from "@/src/comps/TopBar/TopBar";
+import { Banner } from "@/Banner";
+import { LegacyPositionsBanner } from "@/src/comps/LegacyPositionsBanner/LegacyPositionsBanner";
+import { LEGACY_CHECK } from "@/src/env";
 import { css } from "@/styled-system/css";
+import { BottomBar } from "./BottomBar";
+import { TopBar } from "./TopBar";
 
 export const LAYOUT_WIDTH = 1092;
 
@@ -15,47 +19,64 @@ export function AppLayout({
   return (
     <div
       className={css({
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        width: LAYOUT_WIDTH,
+        display: "grid",
+        gridTemplateRows: "auto 1fr",
         minHeight: "100vh",
-        margin: "0 auto",
+        minWidth: "fit-content",
+        height: "100%",
         background: "background",
       })}
     >
       <div
         className={css({
+          display: "flex",
+          flexDirection: "column",
           width: "100%",
-          flexGrow: 0,
-          flexShrink: 0,
-          paddingBottom: 48,
         })}
       >
-        <TopBar />
+        {LEGACY_CHECK && <LegacyPositionsBanner />}
+        <div
+          className={css({
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+            width: "100%",
+          })}
+        >
+          <Banner />
+        </div>
       </div>
       <div
         className={css({
+          display: "grid",
+          gridTemplateRows: "auto 1fr auto",
+          gap: {
+            base: 24,
+            large: 48,
+          },
+          maxWidth: `calc(${LAYOUT_WIDTH}px + 48px)`,
+          margin: "0 auto",
           width: "100%",
-          flexGrow: 1,
-          flexShrink: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
         })}
       >
-        {children}
+        <TopBar />
         <div
           className={css({
             width: "100%",
-            paddingTop: 64,
+            minHeight: 0,
+            padding: {
+              base: "0 12px",
+              medium: "0 24px",
+            },
+            medium: {
+              maxWidth: "100%",
+            },
           })}
         >
-          <ProtocolStats />
+          {children}
         </div>
+        <BottomBar />
       </div>
-      <UpdatePrices />
     </div>
   );
 }

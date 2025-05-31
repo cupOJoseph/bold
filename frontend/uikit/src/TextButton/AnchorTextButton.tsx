@@ -1,29 +1,33 @@
-import type { ComponentPropsWithRef } from "react";
+"use client";
+
+import type { ComponentPropsWithRef, ComponentType } from "react";
 import type { TextButtonProps } from "./TextButton";
 
-import { forwardRef } from "react";
+import { createElement } from "react";
 import { cx } from "../../styled-system/css";
 import { useTextButtonStyles } from "./TextButton";
 
-export const AnchorTextButton = forwardRef<
-  HTMLAnchorElement,
-  ComponentPropsWithRef<"a"> & TextButtonProps
->(function AnchorTextButton({
+export function AnchorTextButton({
+  AnchorComponent,
+  className,
+  external,
   label,
+  ref,
   size,
   ...props
-}, ref) {
+}: ComponentPropsWithRef<"a"> & TextButtonProps & {
+  AnchorComponent?: ComponentType<ComponentPropsWithRef<"a">>;
+  external?: boolean;
+}) {
   const textButtonStyles = useTextButtonStyles(size);
-  return (
-    <a
-      ref={ref}
-      className={cx(
-        props.className,
-        textButtonStyles.className,
-      )}
-      {...props}
-    >
-      {label}
-    </a>
-  );
-});
+  const externalProps = !external ? {} : {
+    target: "_blank",
+    rel: "noopener noreferrer",
+  };
+  return createElement(AnchorComponent ?? "a", {
+    className: cx(textButtonStyles.className, className),
+    ref,
+    ...externalProps,
+    ...props,
+  }, label);
+}

@@ -69,7 +69,6 @@ export async function main() {
 
   let isLocal = false;
 
-  // network preset: local
   if (networkPreset === "local") {
     options.name ??= "liquity2/liquity2";
     options.graphNode ??= "http://localhost:8020/";
@@ -77,20 +76,17 @@ export async function main() {
     options.network ??= "mainnet";
     isLocal = true;
   }
-
   if (networkPreset === "sepolia") {
-    options.name ??= "liquity2";
+    options.name ??= "liquity2-sepolia-preview";
     options.network ??= "sepolia";
   }
-
-  // network preset: liquity-testnet
-  if (networkPreset === "liquity-testnet") {
-    // TODO: implement
+  if (networkPreset === "mainnet-relaunch") {
+    options.name ??= "liquity-2-relaunch";
+    options.network ??= "mainnet";
   }
-
-  // network preset: mainnet
-  if (networkPreset === "mainnet") {
-    // TODO: implement
+  if (networkPreset === "mainnet-legacy") {
+    options.name ??= "liquity2-mainnet";
+    options.network ??= "mainnet";
   }
 
   if (!options.name) {
@@ -136,7 +132,10 @@ export async function main() {
 
   graphDeployCommand.push(options.name);
 
-  await updateNetworksWithLocalBoldToken();
+  if (isLocal) {
+    await updateNetworksWithLocalBoldToken();
+  }
+
   await generateNetworksJson(isLocal);
 
   echo`
@@ -217,24 +216,4 @@ function getLatestDeploymentContext() {
   } catch (_) {
     return null;
   }
-}
-
-declare module "zx" {
-  type MinimistOptions<B extends string, S extends string> = {
-    string?: readonly S[];
-    boolean?: readonly B[];
-    alias?: { [key: string]: B | S };
-    default?: { [key in B | S]?: boolean | string };
-  };
-
-  type MinimistResult<B extends string, S extends string> =
-    & { _: string[] }
-    & { [K in B]: boolean }
-    & { [K in S]: string | undefined }
-    & { [K in string]: boolean | string | string[] };
-
-  function minimist<B extends string, S extends string>(
-    args: string[],
-    options?: MinimistOptions<B, S>,
-  ): MinimistResult<B, S>;
 }

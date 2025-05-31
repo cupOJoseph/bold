@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   deploy-contracts:
+    if: false # Contracts can no longer be deployed to Erigon dev chain because it doesn't support recent hardforks
     name: Deploy contracts
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +60,7 @@ jobs:
 
       - name: Run deployment tool
         working-directory: ./contracts
-        run: ./deploy liquity-testnet --debug --verify
+        run: ./deploy liquity-testnet --debug --verify --skip-confirmation
         timeout-minutes: 10
         env:
           DEPLOYER: ${{ secrets.DEPLOYER }}

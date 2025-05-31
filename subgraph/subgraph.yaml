@@ -6,8 +6,8 @@ dataSources:
     name: BoldToken
     source:
       abi: BoldToken
-      address: "0x21a6370b245c05fade18c601f5efa23e1a3c9833"
-      startBlock: 6684588
+      address: "0x6440f144b7e50d6a8439336510312d2f54beb01d"
+      startBlock: 22483043
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -15,7 +15,6 @@ dataSources:
       entities:
         - Collateral
         - CollateralAddresses
-        - Token
       abis:
         - name: BorrowerOperations
           file: ../contracts/out/BorrowerOperations.sol/BorrowerOperations.json
@@ -27,15 +26,47 @@ dataSources:
           file: ../contracts/out/ERC20.sol/ERC20.json
         - name: TroveManager
           file: ../contracts/out/TroveManager.sol/TroveManager.json
+        - name: TroveNFT
+          file: ../contracts/out/TroveNFT.sol/TroveNFT.json
       eventHandlers:
         - event: CollateralRegistryAddressChanged(address)
           handler: handleCollateralRegistryAddressChanged
       file: ./src/BoldToken.mapping.ts
-    network: sepolia
+    network: mainnet
+  - kind: ethereum/contract
+    name: Governance
+    source:
+      abi: Governance
+      address: "0x807def5e7d057df05c796f4bc75c3fe82bd6eee1"
+      startBlock: 22496547
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - GovernanceAllocation
+        - GovernanceInitiative
+        - GovernanceUser
+      abis:
+        - name: Governance
+          file: ../contracts/out/Governance.sol/Governance.json
+      eventHandlers:
+        - event: AllocateLQTY(indexed address,indexed address,int256,int256,uint256,uint8)
+          handler: handleAllocateLQTY
+        - event: DepositLQTY(indexed
+            address,address,uint256,uint256,uint256,uint256,uint256)
+          handler: handleDepositLQTY
+        - event: RegisterInitiative(address,address,uint256,uint8)
+          handler: handleRegisterInitiative
+        - event: WithdrawLQTY(indexed
+            address,address,uint256,uint256,uint256,uint256,uint256,uint256)
+          handler: handleWithdrawLQTY
+      file: ./src/Governance.mapping.ts
+    network: mainnet
 templates:
   - name: TroveManager
     kind: ethereum/contract
-    network: sepolia
+    network: mainnet
     source:
       abi: TroveManager
     mapping:
@@ -45,6 +76,10 @@ templates:
       file: ./src/TroveManager.mapping.ts
       entities:
         - Trove
+        - InterestRateBracket
+        - InterestBatch
+        - BorrowerInfo
+        - Collateral
       abis:
         - name: TroveManager
           file: ../contracts/out/TroveManager.sol/TroveManager.json
@@ -54,26 +89,26 @@ templates:
         - event: TroveOperation(indexed
             uint256,uint8,uint256,uint256,uint256,int256,uint256,int256)
           handler: handleTroveOperation
-        - event: TroveUpdated(indexed
-            uint256,uint256,uint256,uint256,uint256,uint256,uint256)
-          handler: handleTroveUpdated
-  - name: StabilityPool
+          receipt: true
+        - event: BatchUpdated(indexed
+            address,uint8,uint256,uint256,uint256,uint256,uint256,uint256)
+          handler: handleBatchUpdated
+  - name: TroveNFT
     kind: ethereum/contract
     network: mainnet
     source:
-      abi: StabilityPool
+      abi: TroveNFT
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
-      file: ./src/StabilityPool.mapping.ts
+      file: ./src/TroveNFT.mapping.ts
       entities:
-        - StabilityPool
-        - StabilityPoolDeposit
+        - BorrowerInfo
+        - Trove
       abis:
-        - name: StabilityPool
-          file: ../contracts/out/StabilityPool.sol/StabilityPool.json
+        - name: TroveNFT
+          file: ../contracts/out/TroveNFT.sol/TroveNFT.json
       eventHandlers:
-        - event: DepositUpdated(indexed
-            address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)
-          handler: handleDepositUpdated
+        - event: Transfer(indexed address,indexed address,indexed uint256)
+          handler: handleTransfer

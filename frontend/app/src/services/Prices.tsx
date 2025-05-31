@@ -1,145 +1,109 @@
 "use client";
 
-import { CollateralSymbol } from "@/src/types";
+import type { CollateralSymbol, TokenSymbol } from "@/src/types";
+import type { UseQueryResult } from "@tanstack/react-query";
 import type { Dnum } from "dnum";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
 
-import { useCollateralContract } from "@/src/contracts";
-import {
-  BOLD_PRICE as DEMO_BOLD_PRICE,
-  ETH_PRICE as DEMO_ETH_PRICE,
-  LQTY_PRICE as DEMO_LQTY_PRICE,
-  PRICE_UPDATE_INTERVAL as DEMO_PRICE_UPDATE_INTERVAL,
-  PRICE_UPDATE_MANUAL as DEMO_PRICE_UPDATE_MANUAL,
-  PRICE_UPDATE_VARIATION as DEMO_PRICE_UPDATE_VARIATION,
-  RETH_PRICE as DEMO_RETH_PRICE,
-  STETH_PRICE as DEMO_STETH_PRICE,
-} from "@/src/demo-mode";
-import { dnum18, jsonStringifyWithDnum } from "@/src/dnum-utils";
-import { DEMO_MODE } from "@/src/env";
+import { PRICE_REFRESH_INTERVAL } from "@/src/constants";
+import { getBranchContract } from "@/src/contracts";
+import { dnum18 } from "@/src/dnum-utils";
+import { COINGECKO_API_KEY } from "@/src/env";
+import { isCollateralSymbol } from "@liquity2/uikit";
+import { useQuery } from "@tanstack/react-query";
 import * as dn from "dnum";
-import { createContext, useContext, useEffect, useState } from "react";
-import { useRef } from "react";
-import { useReadContract } from "wagmi";
+import * as v from "valibot";
+import { useConfig as useWagmiConfig } from "wagmi";
+import { readContract } from "wagmi/actions";
 
-type PriceToken = "LQTY" | "BOLD" | CollateralSymbol;
+type PriceToken = "LQTY" | "BOLD" | "LUSD" | CollateralSymbol;
 
-type Prices = Record<PriceToken, Dnum | null>;
+async function fetchCollateralPrice(
+  symbol: CollateralSymbol,
+  config: ReturnType<typeof useWagmiConfig>,
+): Promise<Dnum> {
+  const PriceFeed = getBranchContract(symbol, "PriceFeed");
 
-const initialPrices: Prices = {
-  BOLD: dn.from(1, 18),
-  LQTY: null,
+  const FetchPriceAbi = PriceFeed.abi.find((fn) => fn.name === "fetchPrice");
+  if (!FetchPriceAbi) {
+    throw new Error("fetchPrice ABI not found");
+  }
 
-  // collaterals
-  ETH: null,
-  RETH: null,
-  STETH: null,
-};
-
-function useWatchCollateralPrice(collateral: CollateralSymbol) {
-  const PriceFeed = useCollateralContract(collateral, "PriceFeed");
-  return useReadContract({
-    ...(PriceFeed as NonNullable<typeof PriceFeed>),
-    functionName: "lastGoodPrice",
-    query: {
-      enabled: PriceFeed !== null,
-      refetchInterval: 10_000,
-    },
-  });
-}
-
-let useWatchPrices = function useWatchPrices(callback: (prices: Prices) => void): void {
-  const ethPrice = useWatchCollateralPrice("ETH");
-  const rethPrice = useWatchCollateralPrice("RETH");
-  const stethPrice = useWatchCollateralPrice("STETH");
-
-  const prevPrices = useRef<Prices>({
-    BOLD: null,
-    LQTY: null,
-    ETH: null,
-    RETH: null,
-    STETH: null,
+  const [price] = await readContract(config, {
+    abi: [{ ...FetchPriceAbi, stateMutability: "view" }] as const,
+    address: PriceFeed.address,
+    functionName: "fetchPrice",
   });
 
-  useEffect(() => {
-    const newPrices = {
-      // TODO: check BOLD and LQTY prices
-      BOLD: dn.from(1, 18),
-      LQTY: dn.from(1, 18),
-
-      ETH: ethPrice.data ? dnum18(ethPrice.data) : null,
-      RETH: rethPrice.data ? dnum18(rethPrice.data) : null,
-      STETH: stethPrice.data ? dnum18(stethPrice.data) : null,
-    };
-
-    const hasChanged = jsonStringifyWithDnum(newPrices) !== jsonStringifyWithDnum(prevPrices.current);
-
-    if (hasChanged) {
-      callback(newPrices);
-      prevPrices.current = newPrices;
-    }
-  }, [
-    callback,
-    ethPrice,
-    rethPrice,
-    stethPrice,
-  ]);
-};
-
-// in demo mode, simulate a variation of the prices
-if (DEMO_MODE) {
-  useWatchPrices = (callback) => {
-    useEffect(() => {
-      const update = () => {
-        const variation = () => dn.from((Math.random() - 0.5) * DEMO_PRICE_UPDATE_VARIATION, 18);
-        callback({
-          BOLD: dn.add(DEMO_BOLD_PRICE, dn.mul(DEMO_BOLD_PRICE, variation())),
-          ETH: dn.add(DEMO_ETH_PRICE, dn.mul(DEMO_ETH_PRICE, variation())),
-          LQTY: dn.add(DEMO_LQTY_PRICE, dn.mul(DEMO_LQTY_PRICE, variation())),
-          RETH: dn.add(DEMO_RETH_PRICE, dn.mul(DEMO_RETH_PRICE, variation())),
-          STETH: dn.add(DEMO_STETH_PRICE, dn.mul(DEMO_STETH_PRICE, variation())),
-        });
-      };
-
-      const timer = DEMO_PRICE_UPDATE_MANUAL
-        ? undefined
-        : setInterval(update, DEMO_PRICE_UPDATE_INTERVAL);
-
-      update();
-
-      return () => clearInterval(timer);
-    }, []);
-  };
+  return dnum18(price);
 }
 
-const PriceContext = createContext<{
-  prices: Prices;
-  setPrices: Dispatch<SetStateAction<Prices>>;
-}>({
-  prices: initialPrices,
-  setPrices: () => {},
-});
+type CoinGeckoSymbol = TokenSymbol & ("LQTY" | "LUSD");
+const coinGeckoTokenIds: {
+  [key in CoinGeckoSymbol]: string;
+} = {
+  "LQTY": "liquity",
+  "LUSD": "liquity-usd",
+};
 
-export function Prices({ children }: { children: ReactNode }) {
-  const [prices, setPrices] = useState<Prices>(initialPrices);
+async function fetchCoinGeckoPrice(symbol: CoinGeckoSymbol): Promise<Dnum> {
+  const tokenId = coinGeckoTokenIds[symbol];
 
-  useWatchPrices(setPrices);
+  const url = new URL("https://api.coingecko.com/api/v3/simple/price");
+  url.searchParams.set("vs_currencies", "usd");
+  url.searchParams.set("ids", tokenId);
 
-  return (
-    <PriceContext.Provider value={{ prices, setPrices }}>
-      {children}
-    </PriceContext.Provider>
+  const headers: HeadersInit = { accept: "application/json" };
+
+  if (COINGECKO_API_KEY?.apiType === "demo") {
+    headers["x-cg-demo-api-key"] = COINGECKO_API_KEY.apiKey;
+  }
+  if (COINGECKO_API_KEY?.apiType === "pro") {
+    headers["x-cg-pro-api-key"] = COINGECKO_API_KEY.apiKey;
+  }
+
+  const response = await fetch(url, { headers });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch price for ${symbol}`);
+  }
+
+  const result = v.parse(
+    v.object({
+      [tokenId]: v.object({ "usd": v.number() }),
+    }),
+    await response.json(),
   );
+
+  return dn.from(result[tokenId]?.usd ?? 0, 18);
 }
 
-export function usePrice(token: PriceToken | null) {
-  const { prices } = useContext(PriceContext);
-  return token ? prices[token] : null;
-}
+export function usePrice(symbol: PriceToken | null): UseQueryResult<Dnum> {
+  const config = useWagmiConfig();
+  return useQuery({
+    queryKey: ["usePrice", symbol],
+    queryFn: async () => {
+      if (!symbol) {
+        throw new Error("Symbol is null");
+      }
 
-export function useUpdatePrice() {
-  const { setPrices } = useContext(PriceContext);
-  return (token: PriceToken, price: Dnum | null) => {
-    setPrices((prices) => ({ ...prices, [token]: price }));
-  };
+      // BOLD = $1
+      if (symbol === "BOLD") {
+        return dn.from(1, 18);
+      }
+
+      // LQTY, LUSD = CoinGecko price
+      if (symbol === "LQTY" || symbol === "LUSD") {
+        return fetchCoinGeckoPrice(symbol);
+      }
+
+      // Collateral token = PriceFeed price
+      if (isCollateralSymbol(symbol)) {
+        return fetchCollateralPrice(symbol, config);
+      }
+
+      throw new Error(`Unsupported token: ${symbol}`);
+    },
+    enabled: symbol !== null,
+    refetchInterval: PRICE_REFRESH_INTERVAL,
+  });
 }

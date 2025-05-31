@@ -12,6 +12,16 @@ export const PriceFeed = [{
   "stateMutability": "view",
 }, {
   "type": "function",
+  "name": "fetchRedemptionPrice",
+  "inputs": [],
+  "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }, {
+    "name": "",
+    "type": "bool",
+    "internalType": "bool",
+  }],
+  "stateMutability": "view",
+}, {
+  "type": "function",
   "name": "getEthUsdStalenessThreshold",
   "inputs": [],
   "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
@@ -28,12 +38,6 @@ export const PriceFeed = [{
   "inputs": [],
   "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
   "stateMutability": "view",
-}, {
-  "type": "function",
-  "name": "setAddresses",
-  "inputs": [{ "name": "_borrowerOperationsAddress", "type": "address", "internalType": "address" }],
-  "outputs": [],
-  "stateMutability": "nonpayable",
 }, {
   "type": "function",
   "name": "setPrice",

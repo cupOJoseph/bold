@@ -4,10 +4,9 @@ import {
 } from "../generated/BoldToken/BoldToken";
 import { BorrowerOperations as BorrowerOperationsContract } from "../generated/BoldToken/BorrowerOperations";
 import { CollateralRegistry as CollateralRegistryContract } from "../generated/BoldToken/CollateralRegistry";
-import { ERC20 as ERC20Contract } from "../generated/BoldToken/ERC20";
 import { TroveManager as TroveManagerContract } from "../generated/BoldToken/TroveManager";
-import { Collateral, CollateralAddresses, Token } from "../generated/schema";
-import { StabilityPool as StabilityPoolTemplate, TroveManager as TroveManagerTemplate } from "../generated/templates";
+import { Collateral, CollateralAddresses } from "../generated/schema";
+import { TroveManager as TroveManagerTemplate, TroveNFT as TroveNFTTemplate } from "../generated/templates";
 
 function addCollateral(
   collIndex: i32,
@@ -19,34 +18,24 @@ function addCollateral(
 
   let collateral = new Collateral(collId);
   collateral.collIndex = collIndex;
-  collateral.token = collId;
-  collateral.totalDebt = BigInt.fromI32(0);
-  collateral.totalDeposited = BigInt.fromI32(0);
-  collateral.price = BigInt.fromI32(0);
 
-  let token = new Token(collId);
-  let tokenContract = ERC20Contract.bind(tokenAddress);
-  token.collateral = collId;
-  token.name = tokenContract.name();
-  token.symbol = tokenContract.symbol();
-  token.decimals = tokenContract.decimals();
-
-  let troveManager = TroveManagerContract.bind(troveManagerAddress);
+  let troveManagerContract = TroveManagerContract.bind(troveManagerAddress);
 
   let addresses = new CollateralAddresses(collId);
   addresses.collateral = collId;
-  addresses.borrowerOperations = troveManager.borrowerOperations();
-  addresses.sortedTroves = troveManager.sortedTroves();
-  addresses.stabilityPool = troveManager.stabilityPool();
+  addresses.borrowerOperations = troveManagerContract.borrowerOperations();
+  addresses.sortedTroves = troveManagerContract.sortedTroves();
+  addresses.stabilityPool = troveManagerContract.stabilityPool();
   addresses.token = tokenAddress;
   addresses.troveManager = troveManagerAddress;
-  addresses.troveNft = troveManager.troveNFT();
+  addresses.troveNft = troveManagerContract.troveNFT();
 
-  collateral.minCollRatio = BorrowerOperationsContract.bind(Address.fromBytes(addresses.borrowerOperations)).MCR();
+  collateral.minCollRatio = BorrowerOperationsContract.bind(
+    Address.fromBytes(addresses.borrowerOperations),
+  ).MCR();
 
   collateral.save();
   addresses.save();
-  token.save();
 
   let context = new DataSourceContext();
   context.setBytes("address:borrowerOperations", addresses.borrowerOperations);
@@ -56,10 +45,11 @@ function addCollateral(
   context.setBytes("address:troveManager", addresses.troveManager);
   context.setBytes("address:troveNft", addresses.troveNft);
   context.setString("collId", collId);
+  context.setI32("collIndex", collIndex);
   context.setI32("totalCollaterals", totalCollaterals);
 
   TroveManagerTemplate.createWithContext(troveManagerAddress, context);
-  StabilityPoolTemplate.createWithContext(Address.fromBytes(addresses.stabilityPool), context);
+  TroveNFTTemplate.createWithContext(Address.fromBytes(addresses.troveNft), context);
 }
 
 export function handleCollateralRegistryAddressChanged(event: CollateralRegistryAddressChangedEvent): void {
